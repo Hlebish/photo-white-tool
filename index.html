@@ -67,17 +67,18 @@ button,select{font:inherit;padding:10px 13px;border:1px solid var(--line);border
 </main></div>
 
 <script src="https://cdn.jsdelivr.net/npm/onnxruntime-web@1.23.0/dist/ort.min.js"></script>
-<script type="module">
-import {remove,newSession,rembgConfig} from "https://unpkg.com/@bunnio/rembg-web@1.0.2/dist/index.js";
-
-rembgConfig.setBaseUrl("https://huggingface.co/bunnio/dis_anime/resolve/main");
+<script src="https://unpkg.com/@bunnio/rembg-web@1.0.2/dist/index.umd.min.js"></script>
+<script>
+// UMD-вариант: интерфейс продолжает работать даже если AI-библиотека загрузится с ошибкой.
+const rembg = window.rembgWeb;
+if (rembg?.rembgConfig) rembg.rembgConfig.setBaseUrl("https://huggingface.co/bunnio/dis_anime/resolve/main");
 
 const $=id=>document.getElementById(id);
-const filesEl=$("files"),drop=$("drop"),processBtn=$("process"),status=$("status"),bar=$("bar");
+const filesEl=$("files"),drop=$("drop"),processBtn=$("process"),statusEl=$("status"),bar=$("bar");
 const src=$("src"),out=$("out"),queue=$("queue");
 let files=[],current=-1,baseCanvas=null,workMode="erase";
 
-function status(t,p=null,err=false){status.textContent=t;status.className="status"+(err?" err":"");if(p!==null)bar.style.width=p+"%"}
+function setStatus(t,p=null,err=false){statusEl.textContent=t;statusEl.className="status"+(err?" err":"");if(p!==null)bar.style.width=p+"%"}
 function esc(s){return s.replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#039;"}[c]))}
 function loadImage(blob){return new Promise((res,rej)=>{const im=new Image();im.onload=()=>{URL.revokeObjectURL(im.src);res(im)};im.onerror=rej;im.src=URL.createObjectURL(blob)})}
 function canvasOfImage(im){const c=document.createElement("canvas");c.width=im.naturalWidth||im.width;c.height=im.naturalHeight||im.height;c.getContext("2d").drawImage(im,0,0);return c}
@@ -88,30 +89,41 @@ drop.ondragleave=()=>drop.classList.remove("drag");
 drop.ondrop=e=>{e.preventDefault();drop.classList.remove("drag");setFiles(e.dataTransfer.files)};
 filesEl.onchange=e=>setFiles(e.target.files);
 
+async function showSourcePreview(file){
+  try{
+    const im=await loadImage(file);
+    src.width=im.naturalWidth||im.width; src.height=im.naturalHeight||im.height;
+    src.getContext("2d").drawImage(im,0,0);
+  }catch(e){ console.error(e); }
+}
+
 function setFiles(list){
   files=[...list];current=files.length?0:-1;queue.innerHTML="";
+  if(files.length) showSourcePreview(files[0]);
   files.forEach((f,i)=>{
     const el=document.createElement("div");el.className="item"+(i===0?" active":"");
     el.innerHTML=`<div class="thumb"><img></div><small>${esc(f.name)}</small>`;
     const im=el.querySelector("img");im.src=URL.createObjectURL(f);im.onload=()=>URL.revokeObjectURL(im.src);
-    el.onclick=()=>{current=i;document.querySelectorAll(".item").forEach(x=>x.classList.remove("active"));el.classList.add("active");processBtn.disabled=false;status("Выбрано: "+f.name)};
+    el.onclick=()=>{current=i;document.querySelectorAll(".item").forEach(x=>x.classList.remove("active"));el.classList.add("active");processBtn.disabled=false;setStatus("Выбрано: "+f.name)};
     queue.appendChild(el);
   });
   processBtn.disabled=!files.length;
+  if(files.length) setStatus("Выбрано: "+files[0].name+". Нажми «Обработать».");
 }
 
 async function removeBg(file){
   const model=$("model").value;
-  status("Подготавливаю "+model+"…",5);
-  const session=newSession(model);
-  const result=await remove(file,{
+  setStatus("Подготавливаю "+model+"…",5);
+  if(!rembg) throw new Error("Не загрузился AI-модуль rembg-web. Обнови страницу или проверь интернет.");
+  const session=rembg.newSession(model);
+  const result=await rembg.remove(file,{
     session,
     onlyMask:true,
     postProcessMask:true,
     onProgress:info=>{
       const p=Math.min(85,5+Math.round((info.progress||0)*.8));
       const text=info.step==="downloading"?"Загрузка AI-модели…":info.step==="processing"?"AI выделяет деталь…":info.step==="postprocessing"?"Очищаю маску…":"Готовлю результат…";
-      status(text,p);
+      setStatus(text,p);
     }
   });
   return result;
@@ -166,11 +178,11 @@ async function process(){
     o.drawImage(cut,(640-dw)/2,(480-dh)/2,dw,dh);
     baseCanvas=document.createElement("canvas");baseCanvas.width=640;baseCanvas.height=480;baseCanvas.getContext("2d").drawImage(out,0,0);
 
-    status("Готово. Если модель оставила мусор — используй ластик.",100);
+    setStatus("Готово. Если модель оставила мусор — используй ластик.",100);
     $("download").disabled=false;
   }catch(e){
     console.error(e);
-    status("Ошибка: "+(e?.message||e),0,true);
+    setStatus("Ошибка: "+(e?.message||e),0,true);
   }finally{processBtn.disabled=false}
 }
 processBtn.onclick=process;
