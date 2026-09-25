@@ -1,520 +1,528 @@
-=<!doctype html>
+<!doctype html>
 <html lang="ru">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<title>Фото деталей — белый фон 640×480</title>
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Photo White Tool — V24</title>
 <style>
-:root{--bg:#eef2f6;--card:#fff;--ink:#17202a;--muted:#667382;--blue:#1769ff;--line:#d9e0e7;--soft:#f7f9fb;--red:#c62828;--green:#197a42}
-*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--ink);font:15px system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif}.wrap{width:min(1240px,calc(100% - 24px));margin:18px auto}.card{background:#fff;border:1px solid var(--line);border-radius:18px;padding:22px;box-shadow:0 10px 35px #0000000b}h1{margin:0 0 5px;font-size:25px}.sub{color:var(--muted);margin-bottom:18px}.drop{min-height:125px;border:2px dashed #b7c3cf;border-radius:16px;background:#fafcfe;display:flex;align-items:center;justify-content:center;text-align:center;cursor:pointer;padding:20px}.drop:hover,.drop.drag{border-color:var(--blue);background:#f2f7ff}.drop strong{font-size:18px}.drop span{display:block;color:var(--muted);margin-top:6px}input[type=file]{display:none}
-.controls{display:flex;gap:9px;align-items:center;flex-wrap:wrap;margin-top:14px}button,select{font:inherit;padding:10px 13px;border:1px solid var(--line);border-radius:10px;background:#fff;cursor:pointer}button.primary{background:var(--blue);border-color:var(--blue);color:#fff;font-weight:700}button.active{border-color:var(--blue);color:var(--blue);background:#f1f6ff}button:disabled{opacity:.45;cursor:not-allowed}
-.status{margin-top:12px;color:var(--muted);min-height:22px}.status.err{color:var(--red);font-weight:600}.status.ok{color:var(--green);font-weight:600}.progress{height:7px;background:#e8edf2;border-radius:99px;overflow:hidden}.bar{height:100%;width:0;background:var(--blue);transition:width .2s}
-.grid{display:grid;grid-template-columns:1fr 1fr;gap:15px;margin-top:18px}.pane{border:1px solid var(--line);border-radius:14px;overflow:hidden}.pane h2{font-size:14px;margin:0;padding:10px 12px;border-bottom:1px solid var(--line)}
-.preview{min-height:330px;height:520px;padding:12px;display:flex;align-items:center;justify-content:center;background:repeating-conic-gradient(#f0f2f4 0 25%,#fff 0 50%) 50%/22px 22px;overflow:hidden}.preview canvas{display:block;max-width:100%;max-height:100%;width:auto;height:auto;object-fit:contain;image-rendering:auto}
-.editor-head{display:flex;gap:7px;align-items:center;flex-wrap:wrap;border-bottom:1px solid var(--line);padding:8px 10px;background:#fbfcfd}.editor-head button{padding:7px 10px}.zoom-label{font-size:13px;color:var(--muted);min-width:48px;text-align:center}.editor{height:480px;overflow:auto;touch-action:none;cursor:crosshair;background:#f2f4f7;display:flex;align-items:flex-start;justify-content:flex-start}.editor-inner{padding:18px;min-width:max-content;min-height:max-content}.editor canvas{width:640px;height:480px;display:block;box-shadow:0 2px 12px #0001;transform-origin:top left}
-.tools{border-top:1px solid var(--line);padding:10px 12px;display:flex;gap:8px;align-items:center;flex-wrap:wrap}.tools label{font-size:13px;color:var(--muted)}
-.tuning{margin-top:15px;padding:12px;background:var(--soft);border:1px solid var(--line);border-radius:12px}.tuning-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}.tuning label{display:block;font-size:13px;color:var(--muted)}.tuning input[type=range]{width:100%}.value{font-weight:700;color:var(--ink)}
-.queue{margin-top:16px;display:grid;grid-template-columns:repeat(auto-fill,minmax(170px,1fr));gap:9px}.item{border:1px solid var(--line);border-radius:11px;padding:7px;cursor:pointer;background:#fff}.item.active{border:2px solid var(--blue)}.thumb{height:105px;display:flex;align-items:center;justify-content:center;background:#f5f7f9;border-radius:7px;overflow:hidden}.thumb img{max-width:100%;max-height:100%;object-fit:contain}.item small{display:block;margin-top:5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.note{margin-top:14px;background:#f5f8ff;border:1px solid #dce7ff;border-radius:11px;padding:11px 13px;color:#536a82;font-size:13px;line-height:1.5}.note b{color:#33475b}
-@media(max-width:800px){.wrap{width:calc(100% - 10px);margin:6px auto}.card{padding:13px}.grid{grid-template-columns:1fr}.preview{min-height:250px;height:360px}.tuning-grid{grid-template-columns:1fr}h1{font-size:21px}.editor{height:390px}}
+:root{--bg:#eef1f4;--card:#fff;--ink:#18212b;--muted:#66717d;--line:#d6dde5;--accent:#2e6df6;--danger:#c93636}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:14px/1.4 system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif}
+.wrap{max-width:1500px;margin:0 auto;padding:18px}
+h1{font-size:22px;margin:0 0 10px}
+.grid{display:grid;grid-template-columns:minmax(360px,1fr) minmax(360px,1fr);gap:16px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:12px;box-shadow:0 3px 14px rgba(0,0,0,.04)}
+.card h2{font-size:15px;margin:0 0 8px}
+.toolbar,.row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+button,select,input[type="range"]{font:inherit}
+button,select{border:1px solid #c8d0da;background:#fff;border-radius:10px;padding:8px 10px;cursor:pointer}
+button:hover{background:#f5f7fa}
+button.primary{background:var(--accent);color:#fff;border-color:var(--accent)}
+button.danger{color:#a52121}
+input[type="file"]{max-width:100%}
+label.small{font-size:12px;color:var(--muted)}
+.ctrl{display:grid;grid-template-columns:170px minmax(140px,1fr) 56px;gap:8px;align-items:center;margin:7px 0}
+.ctrl input{width:100%}
+.stage{position:relative;height:560px;border:1px solid var(--line);border-radius:10px;background:#f6f8fa;overflow:hidden}
+canvas.viewer{position:absolute;inset:0;width:100%;height:100%;display:block;cursor:grab}
+canvas.viewer.drag{cursor:grabbing}
+.checker{position:absolute;inset:0;background-color:#fff;background-image:linear-gradient(45deg,#eef1f4 25%,transparent 25%),linear-gradient(-45deg,#eef1f4 25%,transparent 25%),linear-gradient(45deg,transparent 75%,#eef1f4 75%),linear-gradient(-45deg,transparent 75%,#eef1f4 75%);background-size:18px 18px;background-position:0 0,0 9px,9px -9px,-9px 0;opacity:.7}
+.stage > *{pointer-events:none}
+.viewer{z-index:1}
+.controls{margin-top:8px}
+.status{margin-top:10px;padding:8px 10px;border-radius:9px;background:#f5f7fa;color:var(--muted);min-height:36px}
+.status.err{background:#fff0f0;color:#a51f1f}
+.badge{padding:5px 8px;border-radius:8px;background:#eef5ff;color:#265ecb;font-size:12px}
+.note{font-size:12px;color:var(--muted)}
+.sep{height:1px;background:var(--line);margin:12px 0}
+@media(max-width:950px){.grid{grid-template-columns:1fr}.stage{height:420px}}
 </style>
 </head>
 <body>
-<div class="wrap"><main class="card">
-<h1>Фото деталей → чистый белый фон → 640×480</h1>
-<div class="sub">V23 • Adobe-style workflow • точный край • умные отверстия • ручная доработка маски • зум</div>
+<div class="wrap">
+  <h1>Photo White Tool — V24 <span class="badge">BiRefNet Lite 512 + умные отверстия</span></h1>
 
-<label id="drop" class="drop"><div><strong>📷 Нажми или перетащи фотографии сюда</strong><span>Можно выбрать сразу несколько JPG / PNG / WebP</span></div><input id="files" type="file" accept="image/jpeg,image/png,image/webp" multiple></label>
+  <div class="grid">
+    <section class="card">
+      <h2>Исходник</h2>
+      <div class="toolbar">
+        <input id="file" type="file" accept="image/*">
+        <button id="fitSrc">Вписать</button>
+        <button id="src100">100%</button>
+        <button id="srcPlus">+</button>
+        <button id="srcMinus">−</button>
+      </div>
+      <div class="stage" id="srcStage">
+        <div class="checker"></div>
+        <canvas id="srcCanvas" class="viewer"></canvas>
+      </div>
+      <div class="note">Колесо — зум. Левая кнопка мыши — панорама. Пробел + перетаскивание тоже работает.</div>
+    </section>
 
-<div class="controls">
-<button id="process" class="primary" disabled>Обработать</button>
-<label>Модель:
-<select id="model">
-<option value="birefnet512">BiRefNet Lite 512 • рекомендуется</option>
-<option value="ormbg">ORMBG • резерв</option>
-</select></label>
-<label>Вывод:<select id="format"><option value="png">PNG — без потерь</option><option value="jpg">JPG 100%</option></select></label>
-<button id="download" disabled>Скачать</button><button id="showMask" disabled>Показать маску</button>
-</div>
+    <section class="card">
+      <h2>Результат 640×480</h2>
+      <div class="toolbar">
+        <button id="fitRes">Вписать</button>
+        <button id="res100">100%</button>
+        <button id="resPlus">+</button>
+        <button id="resMinus">−</button>
+        <button id="showMask">Показать маску</button>
+      </div>
+      <div class="stage" id="resStage">
+        <div class="checker"></div>
+        <canvas id="resCanvas" class="viewer"></canvas>
+      </div>
+      <div class="note">Редактор: <b>Удалить</b> — ПКМ/Alt, <b>Восстановить</b> — Shift+ЛКМ. Работает по маске исходного размера.</div>
+    </section>
+  </div>
 
-<div class="tuning">
-<div class="tuning-grid">
-<label>Порог маски: <span id="thrVal" class="value">34%</span><input id="thr" type="range" min="10" max="60" value="34"></label>
-<label>Защита края: <span id="edgeVal" class="value">6 px</span><input id="edge" type="range" min="1" max="16" value="6"></label>
-<label>Удаление серого фона: <span id="shadowVal" class="value">55%</span><input id="shadow" type="range" min="0" max="100" value="55"></label>
-<label>Очистка отверстий: <span id="holeVal" class="value">75%</span><input id="hole" type="range" min="0" max="100" value="75"></label>
-<label>Мягкость контура: <span id="featherVal" class="value">0.2 px</span><input id="feather" type="range" min="0" max="12" value="2"></label>
-<label>Чёткость края: <span id="clarityVal" class="value">72%</span><input id="clarity" type="range" min="0" max="100" value="72"></label>
+  <section class="card controls">
+    <div class="row">
+      <input id="file2" type="file" accept="image/*">
+      <select id="model">
+        <option value="studioludens/birefnet-lite-512">BiRefNet Lite 512 — рекомендуется</option>
+      </select>
+      <button id="process" class="primary">Обработать</button>
+      <button id="resetMask">Сбросить ручные правки</button>
+      <button id="downloadPng">Скачать PNG 640×480</button>
+    </div>
+    <div class="sep"></div>
+    <div class="ctrl"><label>Порог объекта</label><input id="threshold" type="range" min="0.10" max="0.80" step="0.01" value="0.34"><output id="thresholdOut">0.34</output></div>
+    <div class="ctrl"><label>Чёткость края</label><input id="edge" type="range" min="0" max="100" step="1" value="72"><output id="edgeOut">72</output></div>
+    <div class="ctrl"><label>Удаление серых теней</label><input id="shadow" type="range" min="0" max="100" step="1" value="55"><output id="shadowOut">55</output></div>
+    <div class="ctrl"><label>Очистка отверстий</label><input id="holes" type="range" min="0" max="100" step="1" value="85"><output id="holesOut">85</output></div>
+    <div class="ctrl"><label>Минимальный размер отверстия</label><input id="holeArea" type="range" min="50" max="5000" step="50" value="350"><output id="holeAreaOut">350</output></div>
+    <div class="ctrl"><label>Подобие фона</label><input id="bgTol" type="range" min="15" max="120" step="1" value="62"><output id="bgTolOut">62</output></div>
+    <div class="ctrl"><label>Мягкость маски</label><input id="soft" type="range" min="0" max="4" step="0.1" value="0.4"><output id="softOut">0.4</output></div>
+    <div class="ctrl"><label>Кисть (для маски)</label><input id="brush" type="range" min="3" max="180" step="1" value="28"><output id="brushOut">28</output></div>
+    <div class="status" id="status">Выбери фотографию и нажми «Обработать».</div>
+    <div class="note">V24 специально не делает искусственную резкость: используются исходные пиксели детали. Новое — автоматическое обнаружение больших «карманов» фона, которые модель ошибочно оставила внутри детали.</div>
+  </section>
 </div>
-<div style="margin-top:8px;color:var(--muted);font-size:13px">Рекомендуется: <b>BiRefNet Lite 512</b> • порог 34% • защита края 6 px • серый фон 55% • отверстия 75% • мягкость 0.2 px • чёткость края 72%. После изменения ползунков нажми «Обработать» заново.</div>
-</div>
-
-<div id="status" class="status">Выбери фотографию.</div><div class="progress"><div id="bar" class="bar"></div></div>
-
-<div class="grid">
-<div class="pane"><h2>Исходник</h2><div class="preview"><canvas id="src"></canvas></div></div>
-<div class="pane">
-<h2>Результат 640×480</h2>
-<div class="editor-head">
-<button id="zoomOut">−</button><button id="zoomReset">100%</button><button id="zoomIn">+</button><button id="zoomFit">Вписать</button><span id="zoomLabel" class="zoom-label">100%</span>
-</div>
-<div id="editor" class="editor"><div id="editorInner" class="editor-inner"><canvas id="out" width="640" height="480"></canvas></div></div>
-<div class="tools">
-<button id="erase" class="active">Ластик</button><button id="restore">Восстановить</button><button id="reset">Сбросить всё</button><label>Кисть <input id="brush" type="range" min="3" max="90" value="25"></label>
-</div>
-</div>
-</div>
-
-<div id="queue" class="queue"></div>
-<div class="note"><b>V23:</b> логика построена по принципу редакторов вроде Adobe Express: AI делает исходную маску, затем отдельный этап уточняет край, убирает фоновые тени и проверяет внутренние отверстия. Автоматическое удаление не заменяет ручную кисть: «Ластик» и «Восстановить» теперь меняют маску <b>исходного изображения</b>, а результат пересобирается из оригинальных пикселей. Это позволяет править край на увеличении, не пережёвывая деталь повторным AI-рендером.</div>
-</main></div>
 
 <script type="module">
-import { AutoModel, AutoProcessor, RawImage, pipeline, env } from 'https://cdn.jsdelivr.net/npm/@huggingface/transformers@3.8.1';
-env.allowLocalModels=false;
-env.allowRemoteModels=true;
-env.useBrowserCache=true;
+import { pipeline, env } from 'https://cdn.jsdelivr.net/npm/@huggingface/transformers@3.8.1';
+env.allowLocalModels = false;
+env.useBrowserCache = true;
 
-const $=id=>document.getElementById(id);
-const filesEl=$('files'),drop=$('drop'),processBtn=$('process'),statusEl=$('status'),bar=$('bar'),src=$('src'),out=$('out'),queue=$('queue'),editor=$('editor'),editorInner=$('editorInner'),showMaskBtn=$('showMask');
-let files=[],current=-1,state=null,workMode='erase',zoom=1,spaceDown=false,drawing=false,panning=false,lastPan={x:0,y:0}; let showMask=false;
-let birefModelPromise=null,birefProcessorPromise=null,ormbPromise=null;
+const $ = id => document.getElementById(id);
+const ui = {
+  file:$('file'), file2:$('file2'), process:$('process'), model:$('model'),
+  srcCanvas:$('srcCanvas'), resCanvas:$('resCanvas'),
+  status:$('status'), fitSrc:$('fitSrc'), src100:$('src100'), srcPlus:$('srcPlus'), srcMinus:$('srcMinus'),
+  fitRes:$('fitRes'), res100:$('res100'), resPlus:$('resPlus'), resMinus:$('resMinus'),
+  showMask:$('showMask'), resetMask:$('resetMask'), downloadPng:$('downloadPng'),
+  threshold:$('threshold'), edge:$('edge'), shadow:$('shadow'), holes:$('holes'), holeArea:$('holeArea'), bgTol:$('bgTol'), soft:$('soft'), brush:$('brush')
+};
 
-function setStatus(text,p=null,kind=''){
-  statusEl.textContent=text;
-  statusEl.className='status'+(kind?' '+kind:'');
-  if(p!==null) bar.style.width=Math.max(0,Math.min(100,p))+'%';
+const outputs = ['threshold','edge','shadow','holes','holeArea','bgTol','soft','brush'];
+for (const k of outputs) {
+  const o = $(k+'Out');
+  ui[k].addEventListener('input', ()=>o.value=ui[k].value);
 }
-function esc(s){return s.replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[c]))}
-function loadImage(blob){
-  return new Promise((res,rej)=>{
-    const im=new Image(),u=URL.createObjectURL(blob);
-    im.onload=()=>{URL.revokeObjectURL(u);res(im)};
-    im.onerror=()=>{URL.revokeObjectURL(u);rej(new Error('Не удалось открыть изображение.'))};
-    im.src=u;
-  });
-}
-function canvasOfImage(im){
-  const c=document.createElement('canvas');
-  c.width=im.naturalWidth||im.width;c.height=im.naturalHeight||im.height;
-  c.getContext('2d').drawImage(im,0,0);
-  return c;
-}
-function fitSourcePreview(){
-  if(!src.width||!src.height)return;
-  const box=src.parentElement;
-  if(!box)return;
-  const aw=Math.max(40,box.clientWidth-24), ah=Math.max(40,box.clientHeight-24);
-  const s=Math.min(1,aw/src.width,ah/src.height);
-  src.style.width=Math.round(src.width*s)+'px';
-  src.style.height=Math.round(src.height*s)+'px';
-}
-async function showSource(file){
-  const im=await loadImage(file);
-  src.width=im.naturalWidth||im.width;src.height=im.naturalHeight||im.height;
-  const c=src.getContext('2d');c.clearRect(0,0,src.width,src.height);c.drawImage(im,0,0);fitSourcePreview();
-}
-function setFiles(list){
-  files=[...list];current=files.length?0:-1;queue.innerHTML='';
-  if(files.length) showSource(files[0]).catch(()=>{});
-  files.forEach((f,i)=>{
-    const el=document.createElement('div');
-    el.className='item'+(i===0?' active':'');
-    el.innerHTML=`<div class="thumb"><img></div><small>${esc(f.name)}</small>`;
-    const im=el.querySelector('img');const u=URL.createObjectURL(f);im.src=u;im.onload=()=>URL.revokeObjectURL(u);
-    el.onclick=()=>{
-      current=i;document.querySelectorAll('.item').forEach(x=>x.classList.remove('active'));el.classList.add('active');
-      processBtn.disabled=false;showSource(f).catch(()=>{});setStatus('Выбрано: '+f.name);
-    };
-    queue.appendChild(el);
-  });
-  processBtn.disabled=!files.length;
-  if(files.length)setStatus(`Выбрано: ${files[0].name}.`);
-}
-drop.onclick=()=>filesEl.click();
-drop.ondragover=e=>{e.preventDefault();drop.classList.add('drag')};
-drop.ondragleave=()=>drop.classList.remove('drag');
-drop.ondrop=e=>{e.preventDefault();drop.classList.remove('drag');setFiles(e.dataTransfer.files)};
-filesEl.onchange=e=>setFiles(e.target.files);
 
-async function getBiRefNet512(){
-  if(birefModelPromise && birefProcessorPromise) return {model:await birefModelPromise,processor:await birefProcessorPromise};
-  if(!birefModelPromise){
-    setStatus('Загружаю BiRefNet Lite 512 (FP32)…',8);
-    const opts={
-      dtype:'fp32',
-      device:'wasm',
-      progress_callback:i=>{
-        const p=Number(i?.progress)||0;
-        if(p>0)setStatus(`Загрузка BiRefNet 512… ${Math.round(p)}%`,Math.min(58,10+p*.48));
-      }
-    };
-    birefModelPromise=AutoModel.from_pretrained('studioludens/birefnet-lite-512',opts);
-    birefModelPromise.catch(()=>{birefModelPromise=null;});
+let srcImage = null, srcUrl = null;
+let srcData = null, maskBase = null, maskEdited = null, resultPixels = null, maskVisible = false;
+let renderMeta = null;
+let segmenter = null, loadingPromise = null;
+
+const view = {
+  src:{scale:1, ox:0, oy:0, dragging:false, sx:0, sy:0, sox:0, soy:0},
+  res:{scale:1, ox:0, oy:0, dragging:false, sx:0, sy:0, sox:0, soy:0}
+};
+
+function status(msg, err=false){ ui.status.textContent=msg; ui.status.className='status'+(err?' err':''); }
+function clamp(v,a,b){return Math.max(a,Math.min(b,v));}
+
+function prepareCanvas(c){
+  c.width = c.clientWidth * devicePixelRatio;
+  c.height = c.clientHeight * devicePixelRatio;
+  c.style.width='100%'; c.style.height='100%';
+}
+function fit(which){
+  const c=which==='src'?ui.srcCanvas:ui.resCanvas, v=view[which];
+  prepareCanvas(c);
+  const w=which==='src'?(srcData?.width||1):(resultPixels?.width||640);
+  const h=which==='src'?(srcData?.height||1):(resultPixels?.height||480);
+  const cw=c.width, ch=c.height;
+  v.scale=Math.min(cw/w,ch/h)*0.92; v.ox=(cw-w*v.scale)/2; v.oy=(ch-h*v.scale)/2;
+  draw(which);
+}
+function set100(which){
+  const c=which==='src'?ui.srcCanvas:ui.resCanvas,v=view[which];
+  prepareCanvas(c);
+  const w=which==='src'?(srcData?.width||1):(resultPixels?.width||640);
+  const h=which==='src'?(srcData?.height||1):(resultPixels?.height||480);
+  v.scale=Math.max(1,Math.min(c.width/w,c.height/h)); v.ox=(c.width-w*v.scale)/2; v.oy=(c.height-h*v.scale)/2;
+  draw(which);
+}
+function changeZoom(which,f){
+  const c=which==='src'?ui.srcCanvas:ui.resCanvas,v=view[which];
+  const cx=c.width/2,cy=c.height/2;
+  const old=v.scale,n=clamp(old*f,0.1,8);
+  const ix=(cx-v.ox)/old, iy=(cy-v.oy)/old;
+  v.scale=n; v.ox=cx-ix*n; v.oy=cy-iy*n; draw(which);
+}
+function draw(which){
+  const c=which==='src'?ui.srcCanvas:ui.resCanvas, v=view[which];
+  const ctx=c.getContext('2d'); ctx.clearRect(0,0,c.width,c.height);
+  const data=which==='src'?srcData:resultPixels;
+  if(!data) return;
+  const off=document.createElement('canvas'); off.width=data.width; off.height=data.height;
+  const ox=off.getContext('2d');
+  if(which==='src'){
+    ox.putImageData(data,0,0);
+  }else{
+    ox.putImageData(data,0,0);
   }
-  if(!birefProcessorPromise){
-    birefProcessorPromise=AutoProcessor.from_pretrained('studioludens/birefnet-lite-512');
-    birefProcessorPromise.catch(()=>{birefProcessorPromise=null;});
-  }
-  return {model:await birefModelPromise,processor:await birefProcessorPromise};
+  ctx.imageSmoothingEnabled = true;
+  ctx.imageSmoothingQuality='high';
+  ctx.drawImage(off,v.ox,v.oy,data.width*v.scale,data.height*v.scale);
+}
+function sourceToImage(which, x, y){
+  const c=which==='src'?ui.srcCanvas:ui.resCanvas,v=view[which];
+  return [(x-v.ox)/v.scale,(y-v.oy)/v.scale];
 }
 
-async function getORMBG(){
-  if(ormbPromise)return ormbPromise;
-  setStatus('Загружаю ORMBG…',8);
-  ormbPromise=(async()=>{
-    const dtypes=['q8','int8','uint8','fp32'];
-    let lastErr=null;
-    for(const dtype of dtypes){
-      try{
-        setStatus(`ORMBG: пробую ${dtype.toUpperCase()}…`,12);
-        return await pipeline('background-removal','onnx-community/ormbg-ONNX',{
-          device:'wasm',dtype,
-          progress_callback:i=>{
-            const p=Number(i?.progress)||0;
-            if(p>0)setStatus(`Загрузка ORMBG ${dtype.toUpperCase()}… ${Math.round(p)}%`,Math.min(58,10+p*.48));
-          }
-        });
-      }catch(e){lastErr=e;console.warn(`ORMBG ${dtype} failed`,e)}
+function mouseEvents(which){
+  const c=which==='src'?ui.srcCanvas:ui.resCanvas,v=view[which];
+  c.addEventListener('wheel',e=>{e.preventDefault(); const r=c.getBoundingClientRect(); const cx=(e.clientX-r.left)*devicePixelRatio, cy=(e.clientY-r.top)*devicePixelRatio;
+    const old=v.scale, f=e.deltaY<0?1.15:0.87, n=clamp(old*f,0.1,8);
+    const ix=(cx-v.ox)/old,iy=(cy-v.oy)/old;v.scale=n;v.ox=cx-ix*n;v.oy=cy-iy*n;draw(which);
+  },{passive:false});
+  c.addEventListener('pointerdown',e=>{
+    if(which==='res' && resultPixels && (e.altKey || e.button===2 || e.shiftKey)) return;
+    v.dragging=true; v.sx=e.clientX;v.sy=e.clientY;v.sox=v.ox;v.soy=v.oy;c.classList.add('drag');c.setPointerCapture(e.pointerId);
+  });
+  c.addEventListener('pointermove',e=>{
+    if(!v.dragging) return;v.ox=v.sox+(e.clientX-v.sx)*devicePixelRatio;v.oy=v.soy+(e.clientY-v.sy)*devicePixelRatio;draw(which);
+  });
+  c.addEventListener('pointerup',e=>{v.dragging=false;c.classList.remove('drag')});
+  c.addEventListener('contextmenu',e=>e.preventDefault());
+}
+mouseEvents('src');mouseEvents('res');
+
+function syncFiles(file){
+  if(!file) return;
+  for(const el of [ui.file,ui.file2]) {
+    // not trying to set input files for security reasons; just keep selected file globally
+  }
+  loadFile(file);
+}
+ui.file.addEventListener('change',e=>syncFiles(e.target.files?.[0]));
+ui.file2.addEventListener('change',e=>syncFiles(e.target.files?.[0]));
+
+async function loadFile(file){
+  if(srcUrl) URL.revokeObjectURL(srcUrl);
+  srcUrl=URL.createObjectURL(file);
+  const im=new Image();
+  im.onload=()=>{
+    srcImage=im;
+    const c=document.createElement('canvas'); c.width=im.naturalWidth;c.height=im.naturalHeight;
+    const ctx=c.getContext('2d',{willReadFrequently:true});ctx.drawImage(im,0,0);
+    srcData=ctx.getImageData(0,0,c.width,c.height);
+    maskBase=null;maskEdited=null;resultPixels=null;maskVisible=false;
+    status(`Фото загружено: ${c.width}×${c.height}.`);
+    fit('src'); draw('res');
+  };
+  im.onerror=()=>status('Не удалось загрузить изображение.',true);
+  im.src=srcUrl;
+}
+
+async function getSegmenter(){
+  if(segmenter) return segmenter;
+  if(loadingPromise) return loadingPromise;
+  loadingPromise=(async()=>{
+    status('Загружаю BiRefNet Lite 512… Первый запуск может занять время.');
+    try{
+      const opts={device:'wasm',dtype:'fp32',progress_callback:p=>{
+        if(p?.status==='progress' && Number.isFinite(p.progress)) status(`Загрузка модели: ${p.progress.toFixed(0)}%`);
+      }};
+      segmenter=await pipeline('image-segmentation','studioludens/birefnet-lite-512',opts);
+      return segmenter;
+    }catch(e){
+      console.error(e); loadingPromise=null;
+      throw e;
     }
-    throw lastErr||new Error('ORMBG не загрузился.');
   })();
-  try{return await ormbPromise}catch(e){ormbPromise=null;throw e}
+  return loadingPromise;
 }
 
-async function tensorToMask(rawTensor,image){
-  // BiRefNet returns logits with a leading batch/channel dimension.
-  // RawImage.fromTensor() is synchronous in Transformers.js 3.8.x; only
-  // the subsequent resize() is async. Normalize the tensor to [1,H,W].
-  let t=rawTensor;
-  if(t?.dims?.length === 4) t=t[0];
-  if(t?.dims?.length === 3 && t.dims[0] !== 1) t=t[0].unsqueeze(0);
-  if(t?.dims?.length === 2) t=t.unsqueeze(0);
-  if(!t?.dims || t.dims.length !== 3){
-    throw new Error(`BiRefNet: неожиданный размер logits ${JSON.stringify(t?.dims||null)}.`);
+function maskFromRawImage(raw,w,h){
+  const mw=raw.width,mh=raw.height, d=raw.data;
+  const ch=raw.channels || (d.length/(mw*mh));
+  const c=document.createElement('canvas');c.width=mw;c.height=mh;
+  const ctx=c.getContext('2d');
+  const id=ctx.createImageData(mw,mh);
+  for(let i=0,p=0;i<mw*mh;i++,p+=ch){
+    const v=ch===1?d[p]:d[p+3]??d[p];
+    id.data[i*4]=v;id.data[i*4+1]=v;id.data[i*4+2]=v;id.data[i*4+3]=255;
   }
-  const alpha=t.sigmoid().mul(255).clamp(0,255).round().to('uint8');
-  const mask=RawImage.fromTensor(alpha,'CHW');
-  return await mask.resize(image.width,image.height);
+  ctx.putImageData(id,0,0);
+  const out=document.createElement('canvas');out.width=w;out.height=h;
+  const octx=out.getContext('2d');octx.imageSmoothingEnabled=true;octx.imageSmoothingQuality='high';octx.drawImage(c,0,0,w,h);
+  return octx.getImageData(0,0,w,h).data;
 }
 
-async function biRefMask(file){
-  const {model,processor}=await getBiRefNet512();
-  setStatus('BiRefNet 512: строю точную маску…',62);
-  const image=await RawImage.fromBlob(file);                 // officially supported Blob input
-  const {pixel_values}=await processor(image);
-  const outv=await model({input_image:pixel_values});
-  const logits=outv?.logits ?? outv?.output_image;
-  if(!logits)throw new Error('BiRefNet: модель не вернула logits.');
-  return tensorToMask(logits,image);
+function median(vals){
+  vals.sort((a,b)=>a-b); return vals[Math.floor(vals.length/2)];
 }
-
-function rawImageToGray(raw){
-  const w=raw.width,h=raw.height,ch=raw.channels||1,data=raw.data;
-  const gray=new Uint8ClampedArray(w*h);
-  if(ch===4){
-    for(let i=0,j=3;i<gray.length;i++,j+=4)gray[i]=data[j];
-  }else if(ch===2){
-    for(let i=0,j=1;i<gray.length;i++,j+=2)gray[i]=data[j];
-  }else if(ch===1){
-    gray.set(data);
-  }else{
-    for(let i=0,j=0;i<gray.length;i++)gray[i]=Math.round((data[j++]+data[j++]+data[j++])/3);
+function estimateBackground(img, alpha){
+  const {width:w,height:h,data}=img;
+  const samplesR=[],samplesG=[],samplesB=[];
+  const step=Math.max(1,Math.floor(Math.max(w,h)/400));
+  for(let y=0;y<h;y+=step){
+    for(let x=0;x<w;x+=step){
+      if(x<step*2||y<step*2||x>=w-step*2||y>=h-step*2){
+        const i=(y*w+x)*4;
+        if(alpha && alpha[i+3] > 40) continue;
+        samplesR.push(data[i]);samplesG.push(data[i+1]);samplesB.push(data[i+2]);
+      }
+    }
   }
-  return {gray,w,h};
+  if(samplesR.length<20){
+    for(let y=0;y<Math.min(h,20);y+=2) for(let x=0;x<Math.min(w,20);x+=2){let i=(y*w+x)*4;samplesR.push(data[i]);samplesG.push(data[i+1]);samplesB.push(data[i+2]);}
+  }
+  return [median(samplesR),median(samplesG),median(samplesB)];
 }
-async function ormbgMask(file){
-  const seg=await getORMBG(),u=URL.createObjectURL(file);
-  try{
-    const r=await seg(u);
-    const raw=r?.mask ?? (Array.isArray(r)?(r[0]?.mask||r[0]):r);
-    if(!raw?.data)throw new Error('ORMBG: неожиданный формат результата.');
-    return rawImageToGray(raw);
-  }finally{URL.revokeObjectURL(u)}
+function colorDist(r,g,b,bg){return Math.sqrt((r-bg[0])**2+(g-bg[1])**2+(b-bg[2])**2);}
+function localGradient(data,w,h,x,y){
+  let i=(y*w+x)*4, c=data[i];
+  let j=(y*w+Math.min(w-1,x+1))*4, k=(y*w+Math.max(0,x-1))*4, l=(Math.min(h-1,y+1)*w+x)*4, m=(Math.max(0,y-1)*w+x)*4;
+  return (Math.abs(c-data[j])+Math.abs(c-data[k])+Math.abs(c-data[l])+Math.abs(c-data[m]))/4;
 }
-async function getMask(file,key){
-  if(key==='ormbg') return ormbgMask(file);
-  return rawImageToGray(await biRefMask(file));
-}
-
-function sampleBackground(original){
-  const ctx=original.getContext('2d',{willReadFrequently:true});
-  const w=original.width,h=original.height;
-  const pts=[];const step=Math.max(1,Math.floor(Math.min(w,h)/90));
-  for(let x=0;x<w;x+=step){pts.push([x,0],[x,h-1])}
-  for(let y=0;y<h;y+=step){pts.push([0,y],[w-1,y])}
-  const vals=[];
-  for(const [x,y] of pts){const d=ctx.getImageData(x,y,1,1).data;vals.push([d[0],d[1],d[2]])}
-  vals.sort((a,b)=>(a[0]+a[1]+a[2])-(b[0]+b[1]+b[2]));
-  return vals[Math.floor(vals.length*.5)]||[220,220,220];
-}
-function dist3(r,g,b,bg){
-  const dr=r-bg[0],dg=g-bg[1],db=b-bg[2];
-  return Math.sqrt(dr*dr+dg*dg+db*db);
-}
-function largestComponent(seed,w,h){
-  const seen=new Uint8Array(w*h),labels=new Int32Array(w*h),sizes=[0],q=new Int32Array(w*h);
-  let label=0,maxLabel=0,maxSize=0;
-  for(let i=0;i<w*h;i++){
-    if(!seed[i]||seen[i])continue;
-    label++;let head=0,tail=0,count=0;q[tail++]=i;seen[i]=1;
+function connectedComponents(mask,w,h,minArea,bgInfo,srcDataObj,holeStrength){
+  // Work on a compact analysis grid for speed; then map components back to full-size pixels.
+  const maxDim=900, s=Math.max(1,Math.ceil(Math.max(w,h)/maxDim)), aw=Math.ceil(w/s), ah=Math.ceil(h/s);
+  const cand=new Uint8Array(aw*ah);
+  const visited=new Uint8Array(aw*ah);
+  const bg=bgInfo;
+  const alphaMin=0.28 + (1-holeStrength)*0.35;
+  const tol=Number(ui.bgTol.value);
+  for(let ay=0;ay<ah;ay++){
+    const y=Math.min(h-1,Math.floor((ay+0.5)*s));
+    for(let ax=0;ax<aw;ax++){
+      const x=Math.min(w-1,Math.floor((ax+0.5)*s));
+      const p=(y*w+x)*4;
+      const a=mask[p+3]/255;
+      const d=colorDist(srcDataObj.data[p],srcDataObj.data[p+1],srcDataObj.data[p+2],bg);
+      const sat=Math.max(srcDataObj.data[p],srcDataObj.data[p+1],srcDataObj.data[p+2])-Math.min(srcDataObj.data[p],srcDataObj.data[p+1],srcDataObj.data[p+2]);
+      const grad=localGradient(srcDataObj.data,w,h,x,y);
+      if(a>alphaMin && d<tol && sat<35 && grad<55) cand[ay*aw+ax]=1;
+    }
+  }
+  const cleared=new Uint8Array(aw*ah);
+  const qx=new Int32Array(aw*ah), qy=new Int32Array(aw*ah);
+  let removed=0;
+  for(let sy=0;sy<ah;sy++) for(let sx=0;sx<aw;sx++){
+    const si=sy*aw+sx;
+    if(!cand[si]||visited[si]) continue;
+    let head=0,tail=0,minx=sx,maxx=sx,miny=sy,maxy=sy,area=0,touches=false;
+    qx[tail]=sx;qy[tail]=sy;tail++;visited[si]=1;
     while(head<tail){
-      const idx=q[head++];labels[idx]=label;count++;
-      const y=(idx/w)|0,x=idx-y*w;
-      if(x>0){const n=idx-1;if(seed[n]&&!seen[n]){seen[n]=1;q[tail++]=n}}
-      if(x<w-1){const n=idx+1;if(seed[n]&&!seen[n]){seen[n]=1;q[tail++]=n}}
-      if(y>0){const n=idx-w;if(seed[n]&&!seen[n]){seen[n]=1;q[tail++]=n}}
-      if(y<h-1){const n=idx+w;if(seed[n]&&!seen[n]){seen[n]=1;q[tail++]=n}}
+      const x=qx[head],y=qy[head];head++;area++;
+      if(x===0||y===0||x===aw-1||y===ah-1) touches=true;
+      if(x<minx)minx=x;if(x>maxx)maxx=x;if(y<miny)miny=y;if(y>maxy)maxy=y;
+      for(const [dx,dy] of [[1,0],[-1,0],[0,1],[0,-1]]){
+        const nx=x+dx,ny=y+dy;if(nx<0||ny<0||nx>=aw||ny>=ah)continue;
+        const ni=ny*aw+nx;
+        if(cand[ni]&&!visited[ni]){visited[ni]=1;qx[tail]=nx;qy[tail]=ny;tail++;}
+      }
     }
-    sizes[label]=count;
-    if(count>maxSize){maxSize=count;maxLabel=label}
-  }
-  const main=new Uint8Array(w*h);
-  if(!maxLabel)return main;
-  for(let i=0;i<w*h;i++)if(labels[i]===maxLabel)main[i]=1;
-  return main;
-}
-function bgLuma(r,g,b){return 0.2126*r+0.7152*g+0.0722*b}
-function bgSaturation(r,g,b){const mx=Math.max(r,g,b),mn=Math.min(r,g,b);return mx?((mx-mn)/mx):0}
-function findBackgroundComponents(pix,w,h,bg,strength){
-  const s=strength/100;
-  if(s<=0)return [];
-  const refL=bgLuma(bg[0],bg[1],bg[2]);
-  const tol=18+105*s;
-  const satTol=0.16-0.10*s;
-  const lumaTol=24+55*s;
-  const cand=new Uint8Array(w*h);
-  for(let i=0,p=0;i<w*h;i++,p+=4){
-    const r=pix[p],g=pix[p+1],b=pix[p+2];
-    const cd=dist3(r,g,b,bg);
-    const ld=Math.abs(bgLuma(r,g,b)-refL);
-    const lowSat=bgSaturation(r,g,b)<=Math.max(0.035,satTol);
-    if(cd<=tol && ld<=lumaTol && lowSat)cand[i]=1;
-  }
-  const seen=new Uint8Array(w*h),q=new Int32Array(w*h),comps=[];
-  const minArea=Math.max(240,Math.round(w*h*(0.00018+0.0014*s)));
-  for(let i=0;i<w*h;i++){
-    if(!cand[i]||seen[i])continue;
-    let head=0,tail=0,count=0,touchesBorder=false,sumD=0;
-    q[tail++]=i;seen[i]=1;
-    while(head<tail){
-      const idx=q[head++];count++;
-      const y=(idx/w)|0,x=idx-y*w;
-      if(x===0||y===0||x===w-1||y===h-1)touchesBorder=true;
-      const p=idx*4;sumD+=dist3(pix[p],pix[p+1],pix[p+2],bg);
-      if(x>0){const n=idx-1;if(cand[n]&&!seen[n]){seen[n]=1;q[tail++]=n}}
-      if(x<w-1){const n=idx+1;if(cand[n]&&!seen[n]){seen[n]=1;q[tail++]=n}}
-      if(y>0){const n=idx-w;if(cand[n]&&!seen[n]){seen[n]=1;q[tail++]=n}}
-      if(y<h-1){const n=idx+w;if(cand[n]&&!seen[n]){seen[n]=1;q[tail++]=n}}
+    const approxArea=area*s*s;
+    const bw=(maxx-minx+1)*s,bh=(maxy-miny+1)*s;
+    if(!touches && approxArea>=minArea && bw>=35 && bh>=25){
+      for(let i=0;i<tail;i++) cleared[qy[i]*aw+qx[i]]=1;
+      removed+=approxArea;
     }
-    if(count>=minArea && !touchesBorder)comps.push({indices:Array.from(q.slice(0,count)),avgDist:sumD/count});
   }
-  return comps;
+  return {cleared,s,aw,ah,removed};
 }
-function smoothstep(a,b,x){
-  const t=Math.max(0,Math.min(1,(x-a)/(b-a)));
-  return t*t*(3-2*t);
-}
-function makeAlpha(raw,original){
-  const {gray,w,h}=raw;
-  const threshold=Number($('thr').value)/100;
-  const protect=Math.max(1,Number($('edge').value));
-  const shadowStrength=Number($('shadow').value)/100;
-  const holeStrength=Number($('hole').value)/100;
-  const clarity=Number($('clarity').value)/100;
-  const pix=original.getContext('2d',{willReadFrequently:true}).getImageData(0,0,w,h).data;
-  const bg=sampleBackground(original);
 
-  // 1) Find the main foreground seed from the model and keep nearby uncertain pixels.
-  const seed=new Uint8Array(w*h);
-  const seedT=Math.max(0.58,threshold+0.10);
-  for(let i=0;i<w*h;i++) if(gray[i]/255>=seedT) seed[i]=1;
-  let main=largestComponent(seed,w,h);
-  if(!main.some(Boolean)){
-    for(let i=0;i<w*h;i++) if(gray[i]/255>=threshold) main[i]=1;
+function applyHoleCleanup(alpha, srcImg){
+  const w=srcImg.width,h=srcImg.height;
+  const bg=estimateBackground(srcImg,alpha);
+  const strength=Number(ui.holes.value)/100;
+  if(strength<=0) return alpha;
+  const comp=connectedComponents(alpha,w,h,Number(ui.holeArea.value),bg,strength);
+  const out=new Uint8ClampedArray(alpha.length);
+  out.set(alpha);
+  for(let ay=0;ay<comp.ah;ay++) for(let ax=0;ax<comp.aw;ax++){
+    if(!comp.cleared[ay*comp.aw+ax]) continue;
+    const x0=ax*comp.s,y0=ay*comp.s,x1=Math.min(w,(ax+1)*comp.s),y1=Math.min(h,(ay+1)*comp.s);
+    for(let y=y0;y<y1;y++) for(let x=x0;x<x1;x++){out[(y*w+x)*4+3]=0;}
   }
-  const allowed=new Uint8Array(w*h);
-  const dist=new Int16Array(w*h); dist.fill(-1);
-  const q=new Int32Array(w*h); let head=0,tail=0;
-  for(let i=0;i<w*h;i++) if(main[i]){allowed[i]=1;dist[i]=0;q[tail++]=i;}
-  const minModel=Math.max(0.03,threshold-0.34);
-  while(head<tail){
-    const idx=q[head++],d=dist[idx]; if(d>=protect) continue;
-    const y=(idx/w)|0,x=idx-y*w;
-    const add=(n)=>{
-      if(dist[n]!==-1)return;
-      const m=gray[n]/255;
-      if(m<minModel)return;
-      dist[n]=d+1; allowed[n]=1; q[tail++]=n;
-    };
-    if(x>0)add(idx-1); if(x<w-1)add(idx+1); if(y>0)add(idx-w); if(y<h-1)add(idx+w);
-  }
-
-  // 2) Refine uncertain pixels using original-image contrast against sampled background.
-  const alpha=new Uint8ClampedArray(w*h);
-  const refL=bgLuma(bg[0],bg[1],bg[2]);
-  const high=Math.min(1,threshold+0.22), low=Math.max(0.02,threshold-0.22);
-  const edgeGate=20 + (1-clarity)*45;
-  for(let i=0,p=0;i<w*h;i++,p+=4){
-    if(!allowed[i]){alpha[i]=0;continue;}
-    const m=gray[i]/255;
-    const cd=dist3(pix[p],pix[p+1],pix[p+2],bg);
-    const colorScore=smoothstep(18,118,cd);
-    const lum=bgLuma(pix[p],pix[p+1],pix[p+2]);
-    const lumDelta=Math.abs(lum-refL);
-    let v=m*0.72 + colorScore*0.28;
-    if(m<=low) v*=0.20;
-    else if(m>=high) v=0.97*Math.max(v,m);
-    // Local edge strength: object/background boundaries get a crisper transition.
-    const x=i%w, y=(i/w)|0;
-    let g=0;
-    if(x>0){const n=(p-4);g+=Math.abs(lum-bgLuma(pix[n],pix[n+1],pix[n+2]));}
-    if(x<w-1){const n=(p+4);g+=Math.abs(lum-bgLuma(pix[n],pix[n+1],pix[n+2]));}
-    if(y>0){const n=p-4*w;g+=Math.abs(lum-bgLuma(pix[n],pix[n+1],pix[n+2]));}
-    if(y<h-1){const n=p+4*w;g+=Math.abs(lum-bgLuma(pix[n],pix[n+1],pix[n+2]));}
-    g*=0.25;
-    if(g>edgeGate && clarity>0){
-      const c=smoothstep(0.22,0.78,v);
-      v=v*(1-0.45*clarity)+c*(0.45*clarity);
-    }
-    // Suppress low-confidence grey/low-saturation shadow pixels while keeping dark high-contrast edges.
-    const sat=bgSaturation(pix[p],pix[p+1],pix[p+2]);
-    const bgLike=Math.max(0,1-cd/110)*Math.max(0,1-lumDelta/90);
-    if(shadowStrength>0 && m<0.78 && sat<0.16){
-      v*=Math.max(0,1-shadowStrength*0.72*bgLike);
-    }
-    alpha[i]=Math.max(0,Math.min(255,Math.round(v*255)));
-  }
-
-  // 3) Remove border-connected background shadows with low model confidence.
-  const bgCandidate=new Uint8Array(w*h);
-  const cut=Math.max(28,Math.round(115-55*shadowStrength));
-  for(let i=0,p=0;i<w*h;i++,p+=4){
-    const a=alpha[i];
-    const cd=dist3(pix[p],pix[p+1],pix[p+2],bg);
-    if(a<=cut && cd<115) bgCandidate[i]=1;
-  }
-  const seen=new Uint8Array(w*h),fq=new Int32Array(w*h); let fh=0,ft=0;
-  const pushBorder=(idx)=>{ if(bgCandidate[idx] && !seen[idx]){seen[idx]=1;fq[ft++]=idx;} };
-  for(let x=0;x<w;x++){pushBorder(x);pushBorder((h-1)*w+x);} for(let y=0;y<h;y++){pushBorder(y*w);pushBorder(y*w+w-1);}
-  while(fh<ft){
-    const idx=fq[fh++],y=(idx/w)|0,x=idx-y*w;
-    const add=n=>{if(bgCandidate[n]&&!seen[n]){seen[n]=1;fq[ft++]=n;}};
-    if(x>0)add(idx-1);if(x<w-1)add(idx+1);if(y>0)add(idx-w);if(y<h-1)add(idx+w);
-  }
-  for(let i=0;i<w*h;i++) if(seen[i]) alpha[i]=0;
-
-  // 4) True enclosed holes: low-alpha regions NOT connected to image borders.
-  const lowHole=new Uint8Array(w*h); const holeCut=Math.round(98-38*holeStrength);
-  for(let i=0;i<w*h;i++) if(alpha[i]<holeCut) lowHole[i]=1;
-  const hSeen=new Uint8Array(w*h),hq=new Int32Array(w*h); let hh=0,ht=0;
-  const hp=(idx)=>{if(lowHole[idx]&&!hSeen[idx]){hSeen[idx]=1;hq[ht++]=idx;}};
-  for(let x=0;x<w;x++){hp(x);hp((h-1)*w+x);} for(let y=0;y<h;y++){hp(y*w);hp(y*w+w-1);}
-  while(hh<ht){
-    const idx=hq[hh++],y=(idx/w)|0,x=idx-y*w; const add=n=>{if(lowHole[n]&&!hSeen[n]){hSeen[n]=1;hq[ht++]=n;}};
-    if(x>0)add(idx-1);if(x<w-1)add(idx+1);if(y>0)add(idx-w);if(y<h-1)add(idx+w);
-  }
-  const minHole=Math.max(80,Math.round(w*h*(0.00012+0.0009*holeStrength)));
-  const comps=new Int32Array(w*h); let compN=0;
-  for(let i=0;i<w*h;i++){
-    if(!lowHole[i]||hSeen[i]===1)continue;
-    compN++; let ch=0,ct=0,count=0,sumCd=0;
-    comps[ct++]=i; hSeen[i]=1;
-    while(ch<ct){
-      const idx=comps[ch++];count++; const p=idx*4;sumCd+=dist3(pix[p],pix[p+1],pix[p+2],bg);
-      const y=(idx/w)|0,x=idx-y*w; const add=n=>{if(lowHole[n]&&!hSeen[n]){hSeen[n]=1;comps[ct++]=n;}};
-      if(x>0)add(idx-1);if(x<w-1)add(idx+1);if(y>0)add(idx-w);if(y<h-1)add(idx+w);
-    }
-    const avgCd=sumCd/Math.max(1,count);
-    if(count>=minHole && (avgCd<150 || holeStrength>0.82)) for(let j=0;j<ct;j++) alpha[comps[j]]=0;
-  }
-  return {alpha,w,h,bg};
+  return out;
 }
-function compositeCut(original,alpha,w,h,b){
-  const bw=b.maxX-b.minX+1,bh=b.maxY-b.minY+1;
-  const cut=document.createElement('canvas'); cut.width=bw; cut.height=bh;
-  const ctx=cut.getContext('2d',{willReadFrequently:true});
-  ctx.drawImage(original,b.minX,b.minY,bw,bh,0,0,bw,bh);
-  const img=ctx.getImageData(0,0,bw,bh),d=img.data;
-  for(let y=0;y<bh;y++) for(let x=0;x<bw;x++) d[(y*bw+x)*4+3]=alpha[(b.minY+y)*w+(b.minX+x)];
-  ctx.putImageData(img,0,0);
-  return cut;
+
+function softenAndShadowClean(alpha, srcImg){
+  const w=srcImg.width,h=srcImg.height,data=srcImg.data,out=new Uint8ClampedArray(alpha);
+  const bg=estimateBackground(srcImg,alpha);
+  const shadow=Number(ui.shadow.value)/100;
+  const edge=Number(ui.edge.value)/100;
+  const tol=Number(ui.bgTol.value);
+  const passes=1;
+  for(let y=1;y<h-1;y++){
+    for(let x=1;x<w-1;x++){
+      const p=(y*w+x)*4, a=alpha[p+3]/255;
+      if(a<=0.01||a>=0.99) continue;
+      const d=colorDist(data[p],data[p+1],data[p+2],bg);
+      if(d<tol){
+        const factor=shadow*(1-Math.min(1,d/tol));
+        out[p+3]=Math.round(a*255*(1-factor));
+      }else if(edge>0.15){
+        // Preserve strong local color contrast near genuine object boundaries.
+        const g=localGradient(data,w,h,x,y)/255;
+        if(g>0.15) out[p+3]=Math.max(out[p+3],Math.round(a*255*Math.min(1,0.75+0.25*edge)));
+      }
+    }
+  }
+  return out;
 }
-function findBounds(alpha,w,h){let minX=w,minY=h,maxX=-1,maxY=-1;for(let y=0;y<h;y++)for(let x=0;x<w;x++){if(alpha[y*w+x]>8){if(x<minX)minX=x;if(x>maxX)maxX=x;if(y<minY)minY=y;if(y>maxY)maxY=y}}return {minX,minY,maxX,maxY,ok:maxX>=0}}
-function fitZoom(){const availW=Math.max(260,editor.clientWidth-36),availH=Math.max(220,editor.clientHeight-36);zoom=Math.min(availW/640,availH/480);zoom=Math.max(.5,Math.min(4,zoom));applyZoom()}
-function applyZoom(){zoom=Math.max(.5,Math.min(4,zoom));out.style.width=(640*zoom)+'px';out.style.height=(480*zoom)+'px';editorInner.style.width=(640*zoom+36)+'px';editorInner.style.height=(480*zoom+36)+'px';$('zoomLabel').textContent=Math.round(zoom*100)+'%';}
-function renderResult(){
-  if(!state)return;
-  const {original,alpha,b}=state;
-  const cut=compositeCut(original,alpha,original.width,original.height,b);
-  const o=out.getContext('2d');o.clearRect(0,0,640,480);o.fillStyle='#fff';o.fillRect(0,0,640,480);
-  const bw=b.maxX-b.minX+1,bh=b.maxY-b.minY+1;
-  const scale=Math.min(600/bw,440/bh),dw=Math.max(1,Math.round(bw*scale)),dh=Math.max(1,Math.round(bh*scale)),dx=Math.round((640-dw)/2),dy=Math.round((480-dh)/2);
+
+function feather(alpha,w,h,r){
+  if(r<=0) return alpha;
+  const src=alpha.slice(), out=alpha.slice(), rad=Math.max(1,Math.round(r)), k=rad*2+1;
+  // lightweight 1D box blur on alpha channel
+  const tmp=new Uint8ClampedArray(alpha.length);
+  for(let y=0;y<h;y++){
+    let sum=0;
+    for(let x=-rad;x<=rad;x++){const xx=clamp(x,0,w-1);sum+=src[(y*w+xx)*4+3];}
+    for(let x=0;x<w;x++){
+      tmp[(y*w+x)*4+3]=Math.round(sum/k);
+      const aOut=clamp(x-rad,0,w-1),aIn=clamp(x+rad+1,0,w-1);
+      sum+=src[(y*w+aIn)*4+3]-src[(y*w+aOut)*4+3];
+    }
+  }
+  for(let x=0;x<w;x++){
+    let sum=0;
+    for(let y=-rad;y<=rad;y++){const yy=clamp(y,0,h-1);sum+=tmp[(yy*w+x)*4+3];}
+    for(let y=0;y<h;y++){
+      out[(y*w+x)*4+3]=Math.round(sum/k);
+      const aOut=clamp(y-rad,0,h-1),aIn=clamp(y+rad+1,0,h-1);
+      sum+=tmp[(aIn*w+x)*4+3]-tmp[(aOut*w+x)*4+3];
+    }
+  }
+  return out;
+}
+
+function buildResult(alpha){
+  const w=srcData.width,h=srcData.height;
+  const out=document.createElement('canvas');out.width=640;out.height=480;
+  const o=out.getContext('2d');
+  o.fillStyle='#fff';o.fillRect(0,0,640,480);
+  let minX=w,minY=h,maxX=-1,maxY=-1;
+  for(let y=0;y<h;y+=2) for(let x=0;x<w;x+=2){
+    if(alpha[(y*w+x)*4+3]>20){if(x<minX)minX=x;if(x>maxX)maxX=x;if(y<minY)minY=y;if(y>maxY)maxY=y;}
+  }
+  if(maxX<0){renderMeta=null;return o.getImageData(0,0,640,480);}
+  const pad=Math.max(4,Math.round(Math.min(w,h)*0.01));
+  minX=clamp(minX-pad,0,w-1);minY=clamp(minY-pad,0,h-1);maxX=clamp(maxX+pad,0,w-1);maxY=clamp(maxY+pad,0,h-1);
+  const cw=maxX-minX+1,ch=maxY-minY+1, scale=Math.min(600/cw,420/ch), dw=Math.max(1,Math.round(cw*scale)),dh=Math.max(1,Math.round(ch*scale));
+  const tmp=document.createElement('canvas');tmp.width=cw;tmp.height=ch;
+  const t=tmp.getContext('2d'),crop=t.createImageData(cw,ch);
+  for(let y=0;y<ch;y++) for(let x=0;x<cw;x++){
+    const si=((minY+y)*w+(minX+x))*4,di=(y*cw+x)*4;
+    crop.data[di]=srcData.data[si];crop.data[di+1]=srcData.data[si+1];crop.data[di+2]=srcData.data[si+2];crop.data[di+3]=alpha[si+3];
+  }
+  t.putImageData(crop,0,0);
+  const ox=(640-dw)/2,oy=(480-dh)/2;
   o.imageSmoothingEnabled=true;o.imageSmoothingQuality='high';
-  if(showMask){
-    const m=document.createElement('canvas');m.width=bw;m.height=bh;const mc=m.getContext('2d');const mi=mc.createImageData(bw,bh);for(let y=0;y<bh;y++)for(let x=0;x<bw;x++){const a=alpha[(b.minY+y)*original.width+(b.minX+x)],j=(y*bw+x)*4;mi.data[j]=a;mi.data[j+1]=a;mi.data[j+2]=a;mi.data[j+3]=255;}mc.putImageData(mi,0,0);o.drawImage(m,0,0,bw,bh,dx,dy,dw,dh);
-  }else{
-    o.drawImage(cut,0,0,bw,bh,dx,dy,dw,dh);
-  }
-  state.render={bw,bh,scale,dx,dy};
+  o.drawImage(tmp,ox,oy,dw,dh);
+  renderMeta={minX,minY,cw,ch,scale,dw,dh,ox,oy};
+  return o.getImageData(0,0,640,480);
 }
-function pointerToCanvas(e){const r=out.getBoundingClientRect();return {x:(e.clientX-r.left)*640/r.width,y:(e.clientY-r.top)*480/r.height}}
-function paintMask(e){
-  if(!state)return;
-  const p=pointerToCanvas(e), rOut=Number($('brush').value);
-  const t=state.render; const sx=state.b.minX+(p.x-t.dx)/t.scale, sy=state.b.minY+(p.y-t.dy)/t.scale;
-  const sr=rOut/t.scale;
-  if(!Number.isFinite(sx)||!Number.isFinite(sy)||sx<0||sy<0||sx>=state.original.width||sy>=state.original.height)return;
-  if(p.x<t.dx||p.x>t.dx+t.render.bw*t.scale||p.y<t.dy||p.y>t.dy+t.render.bh*t.scale)return;
-  const x0=Math.max(0,Math.floor(sx-sr)),x1=Math.min(state.original.width-1,Math.ceil(sx+sr));
-  const y0=Math.max(0,Math.floor(sy-sr)),y1=Math.min(state.original.height-1,Math.ceil(sy+sr));
-  for(let y=y0;y<=y1;y++)for(let x=x0;x<=x1;x++){
-    const dx=x-sx,dy=y-sy;if(dx*dx+dy*dy>sr*sr)continue;
-    const idx=y*state.original.width+x;
-    state.alpha[idx]=workMode==='erase'?0:state.initialAlpha[idx];
-  }
-  renderResult();
-}
-$('zoomIn').onclick=()=>{zoom=Math.min(4,zoom*1.25);applyZoom()};$('zoomOut').onclick=()=>{zoom=Math.max(.5,zoom/1.25);applyZoom()};$('zoomReset').onclick=()=>{zoom=1;applyZoom()};$('zoomFit').onclick=fitZoom;window.addEventListener('resize',()=>{if(zoom<1)fitZoom();fitSourcePreview()});
-editor.addEventListener('wheel',e=>{if(e.ctrlKey)e.preventDefault();const rect=out.getBoundingClientRect(),mx=e.clientX-rect.left,my=e.clientY-rect.top;if(!rect.width)return;const old=zoom;zoom*=e.deltaY<0?1.12:.89;zoom=Math.max(.5,Math.min(4,zoom));applyZoom();const nx=mx*zoom/old,ny=my*zoom/old;editor.scrollLeft+=nx-mx;editor.scrollTop+=ny-my;e.preventDefault()},{passive:false});
-document.addEventListener('keydown',e=>{if(e.code==='Space'){spaceDown=true;e.preventDefault()}});document.addEventListener('keyup',e=>{if(e.code==='Space')spaceDown=false});
-out.addEventListener('pointerdown',e=>{if(e.button===1||spaceDown){panning=true;lastPan={x:e.clientX,y:e.clientY};out.setPointerCapture(e.pointerId);return}drawing=true;out.setPointerCapture(e.pointerId);paintMask(e)});
-out.addEventListener('pointermove',e=>{if(panning){const dx=e.clientX-lastPan.x,dy=e.clientY-lastPan.y;editor.scrollLeft-=dx;editor.scrollTop-=dy;lastPan={x:e.clientX,y:e.clientY};return}if(drawing)paintMask(e)});
-out.addEventListener('pointerup',()=>{drawing=false;panning=false});out.addEventListener('pointercancel',()=>{drawing=false;panning=false});
-$('erase').onclick=()=>{workMode='erase';$('erase').classList.add('active');$('restore').classList.remove('active')};$('restore').onclick=()=>{workMode='restore';$('restore').classList.add('active');$('erase').classList.remove('active')};
-$('reset').onclick=()=>{if(state){state.alpha=state.initialAlpha.slice();renderResult();}};
-$('thr').oninput=e=>$('thrVal').textContent=e.target.value+'%';$('edge').oninput=e=>$('edgeVal').textContent=e.target.value+' px';$('shadow').oninput=e=>$('shadowVal').textContent=e.target.value+'%';$('hole').oninput=e=>$('holeVal').textContent=e.target.value+'%';$('feather').oninput=e=>$('featherVal').textContent=(Number(e.target.value)/10).toFixed(1)+' px';$('clarity').oninput=e=>$('clarityVal').textContent=e.target.value+'%';$('showMask').onclick=()=>{showMask=!showMask;showMaskBtn.classList.toggle('active',showMask);showMaskBtn.textContent=showMask?'Скрыть маску':'Показать маску';if(state)renderResult()};
-$('model').onchange=()=>{setStatus('Модель изменена. Нажми «Обработать» заново.');};
 
 async function process(){
-  if(current<0||processBtn.disabled)return;
-  processBtn.disabled=true; $('download').disabled=true; showMaskBtn.disabled=true; showMask=false; showMaskBtn.classList.remove('active'); showMaskBtn.textContent='Показать маску';
+  if(!srcImage||!srcData){status('Сначала выбери фотографию.',true);return}
+  ui.process.disabled=true;
   try{
-    const file=files[current],im=await loadImage(file),original=canvasOfImage(im);
-    src.width=original.width;src.height=original.height;src.getContext('2d').clearRect(0,0,src.width,src.height);src.getContext('2d').drawImage(original,0,0);fitSourcePreview();
-    setStatus('AI строит исходную маску…',12);
-    const key=$('model').value;
-    const raw=await getMask(file,key);
-    setStatus('Уточняю край, тени и внутренние отверстия…',72);
-    const refined=makeAlpha(raw,original);
-    const b=findBounds(refined.alpha,refined.w,refined.h);
-    if(!b.ok)throw new Error('Не удалось найти объект после очистки маски. Уменьши порог или очистку отверстий.');
-    const pad=Math.max(3,Math.round(Math.min(original.width,original.height)*.004));
-    b.minX=Math.max(0,b.minX-pad);b.minY=Math.max(0,b.minY-pad);b.maxX=Math.min(original.width-1,b.maxX+pad);b.maxY=Math.min(original.height-1,b.maxY+pad);
-    state={original,alpha:refined.alpha,initialAlpha:refined.alpha.slice(),b,render:null};
-    renderResult();
-    applyZoom();
-    showMaskBtn.disabled=false; $('download').disabled=false;
-    setStatus(`Готово • ${key==='birefnet512'?'BiRefNet Lite 512':'ORMBG'} • край ${$('clarity').value}% • отверстия ${$('hole').value}%`,100,'ok');
+    const pipe=await getSegmenter();
+    status('AI строит исходную маску…');
+    const segments=await pipe(srcUrl);
+    if(!segments?.length) throw new Error('Модель не вернула маску');
+    let best=segments[0];
+    for(const s of segments){if((s.score??0)>=(best.score??0))best=s;}
+    const rawMask=best.mask || best;
+    const baseMask=maskFromRawImage(rawMask,srcData.width,srcData.height);
+    const thresh=Number(ui.threshold.value);
+    for(let i=3;i<baseMask.length;i+=4) baseMask[i]=baseMask[i]/255>=thresh?baseMask[i]:0;
+    maskBase=baseMask;
+    // V24: first remove large background-like enclosed regions from the model mask.
+    let m=applyHoleCleanup(maskBase,srcData);
+    m=softenAndShadowClean(m,srcData);
+    const softR=Number(ui.soft.value);
+    if(softR>0)m=feather(m,srcData.width,srcData.height,softR);
+    maskEdited=m.slice();
+    resultPixels=buildResult(maskEdited);
+    status('Готово. Внутренние отверстия очищены отдельным алгоритмом.');
+    fit('res'); draw('res');
   }catch(e){
-    console.error('PROCESS_ERROR',e);
-    const msg=e?.message||String(e);
-    setStatus('Ошибка: '+msg,0,'err');
-  }finally{processBtn.disabled=false}
+    console.error(e); status(`Ошибка обработки: ${e?.message||e}`,true);
+  }finally{ui.process.disabled=false;}
 }
-processBtn.onclick=process;
-$('download').onclick=()=>{const png=$('format').value==='png';const type=png?'image/png':'image/jpeg';out.toBlob(b=>{const u=URL.createObjectURL(b),a=document.createElement('a');a.href=u;a.download='detail-640x480.'+(png?'png':'jpg');a.click();setTimeout(()=>URL.revokeObjectURL(u),1000)},type,png?undefined:1)};
-applyZoom();
+
+function buildMaskPreview(){
+  const out=document.createElement('canvas');out.width=640;out.height=480;
+  const o=out.getContext('2d');o.fillStyle='#fff';o.fillRect(0,0,640,480);
+  if(!maskEdited||!renderMeta) return o.getImageData(0,0,640,480);
+  const mw=srcData.width;
+  const tmp=document.createElement('canvas');tmp.width=renderMeta.cw;tmp.height=renderMeta.ch;
+  const t=tmp.getContext('2d'),id=t.createImageData(tmp.width,tmp.height);
+  for(let y=0;y<renderMeta.ch;y++) for(let x=0;x<renderMeta.cw;x++){
+    const si=((renderMeta.minY+y)*mw+(renderMeta.minX+x))*4,di=(y*renderMeta.cw+x)*4,v=maskEdited[si+3];
+    id.data[di]=v;id.data[di+1]=v;id.data[di+2]=v;id.data[di+3]=255;
+  }
+  t.putImageData(id,0,0);o.imageSmoothingEnabled=true;o.imageSmoothingQuality='high';
+  o.drawImage(tmp,renderMeta.ox,renderMeta.oy,renderMeta.dw,renderMeta.dh);
+  return o.getImageData(0,0,640,480);
+}
+function showMask(){
+  if(!maskEdited||!srcData)return;
+  resultPixels=buildMaskPreview();maskVisible=true;fit('res');draw('res');
+}
+function restoreResult(){
+  if(maskEdited){resultPixels=buildResult(maskEdited);maskVisible=false;fit('res');draw('res');}
+}
+function paintMaskAtOutput(clientX,clientY,mode){
+  if(!maskEdited||!renderMeta||!srcData)return;
+  const r=ui.resCanvas.getBoundingClientRect();
+  const px=(clientX-r.left)/r.width*640, py=(clientY-r.top)/r.height*480;
+  const sx=(px-renderMeta.ox)/renderMeta.scale+renderMeta.minX;
+  const sy=(py-renderMeta.oy)/renderMeta.scale+renderMeta.minY;
+  if(sx<0||sy<0||sx>=srcData.width||sy>=srcData.height)return;
+  const brush=Number(ui.brush.value), rr=brush/Math.max(renderMeta.scale,0.01);
+  const x0=Math.max(0,Math.floor(sx-rr)),x1=Math.min(srcData.width-1,Math.ceil(sx+rr));
+  const y0=Math.max(0,Math.floor(sy-rr)),y1=Math.min(srcData.height-1,Math.ceil(sy+rr)),rr2=rr*rr;
+  for(let y=y0;y<=y1;y++) for(let x=x0;x<=x1;x++){
+    const dx=x-sx,dy=y-sy;if(dx*dx+dy*dy>rr2)continue;
+    const p=(y*srcData.width+x)*4;maskEdited[p+3]=mode==='erase'?0:255;
+  }
+  resultPixels=buildResult(maskEdited);maskVisible=false;draw('res');
+}
+let brushDrag=false,brushMode='erase';
+ui.resCanvas.addEventListener('pointerdown',e=>{
+  if(!maskEdited||maskVisible)return;
+  if(e.button===2||e.altKey||e.shiftKey){
+    brushDrag=true;brushMode=e.shiftKey?'restore':'erase';ui.resCanvas.setPointerCapture(e.pointerId);
+    paintMaskAtOutput(e.clientX,e.clientY,brushMode);
+  }
+});
+ui.resCanvas.addEventListener('pointermove',e=>{if(brushDrag)paintMaskAtOutput(e.clientX,e.clientY,brushMode);});
+ui.resCanvas.addEventListener('pointerup',()=>brushDrag=false);
+ui.resCanvas.addEventListener('pointercancel',()=>brushDrag=false);
+
+ui.process.addEventListener('click',process);
+ui.showMask.addEventListener('click',()=>{if(maskVisible)restoreResult(); else showMask();});
+ui.resetMask.addEventListener('click',()=>{if(maskBase){maskEdited=maskBase.slice();maskEdited=applyHoleCleanup(maskEdited,srcData);resultPixels=buildResult(maskEdited);maskVisible=false;fit('res');draw('res');status('Ручные изменения сброшены.');}});
+ui.fitSrc.addEventListener('click',()=>fit('src'));ui.src100.addEventListener('click',()=>set100('src'));ui.srcPlus.addEventListener('click',()=>changeZoom('src',1.25));ui.srcMinus.addEventListener('click',()=>changeZoom('src',0.8));
+ui.fitRes.addEventListener('click',()=>fit('res'));ui.res100.addEventListener('click',()=>set100('res'));ui.resPlus.addEventListener('click',()=>changeZoom('res',1.25));ui.resMinus.addEventListener('click',()=>changeZoom('res',0.8));
+ui.downloadPng.addEventListener('click',()=>{
+  if(!resultPixels){status('Сначала обработай фотографию.',true);return}
+  const c=document.createElement('canvas');c.width=640;c.height=480;c.getContext('2d').putImageData(resultPixels,0,0);
+  c.toBlob(b=>{const a=document.createElement('a');a.href=URL.createObjectURL(b);a.download='photo-640x480.png';a.click();setTimeout(()=>URL.revokeObjectURL(a.href),1000)},'image/png');
+});
+window.addEventListener('resize',()=>{fit('src');fit('res')});
 </script>
 </body>
 </html>
