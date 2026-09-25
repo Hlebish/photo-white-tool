@@ -41,7 +41,7 @@ button:disabled{opacity:.45;cursor:not-allowed}.check{display:flex;align-items:c
 
 <div class="controls">
   <button class="primary" id="process" disabled>Обработать</button>
-  <label class="check"><input id="enhance" type="checkbox" checked> AI-улучшение ×2</label>
+  <label class="check"><input id="enhance" type="checkbox"> AI-улучшение ×2</label>
   <label>Формат:
     <select id="format"><option value="jpg">JPG 100%</option><option value="png">PNG без потерь</option></select>
   </label>
@@ -79,7 +79,6 @@ import { pipeline, RawImage, env } from "https://cdn.jsdelivr.net/npm/@huggingfa
 env.allowLocalModels=false;
 env.useBrowserCache=true;
 
-const MODEL_FULL="onnx-community/BiRefNet-ONNX";
 const MODEL_LITE="onnx-community/BiRefNet_lite-ONNX";
 const SR_MODEL="Xenova/swin2SR-classical-sr-x2-64";
 
@@ -113,28 +112,24 @@ function setFiles(list){
 
 async function getSegmenter(){
   if(segmenter)return segmenter;
-  msg("Загружаю BiRefNet… первый запуск может быть долгим.",5);
+  msg("Загружаю компактную BiRefNet Lite (около 224 МБ)…",5);
   try{
     if(navigator.gpu){
       const adapter=await navigator.gpu.requestAdapter();
       if(adapter){
         try{
-          segmenter=await pipeline("image-segmentation",MODEL_FULL,{device:"webgpu",dtype:"fp16"});
-          msg("BiRefNet загружен (WebGPU).",18);return segmenter;
-        }catch(e){console.warn("Full WebGPU failed",e)}
+          segmenter=await pipeline("image-segmentation",MODEL_LITE,{device:"webgpu",dtype:"fp16"});
+          msg("BiRefNet Lite загружен (WebGPU).",30);
+          return segmenter;
+        }catch(e){console.warn("BiRefNet Lite WebGPU failed:",e)}
       }
     }
-  }catch(e){console.warn(e)}
-  try{
-    segmenter=await pipeline("image-segmentation",MODEL_FULL,{device:"wasm",dtype:"fp32"});
-    msg("BiRefNet загружен (WASM).",18);return segmenter;
-  }catch(e){
-    console.warn("Full model failed, trying Lite",e);
-    segmenter=await pipeline("image-segmentation",MODEL_LITE,{device:"wasm",dtype:"fp32"});
-    msg("BiRefNet Lite загружен (WASM).",18);return segmenter;
-  }
+  }catch(e){console.warn("WebGPU check failed:",e)}
+  msg("WebGPU недоступен — загружаю BiRefNet Lite через WASM…",15);
+  segmenter=await pipeline("image-segmentation",MODEL_LITE,{device:"wasm",dtype:"fp32"});
+  msg("BiRefNet Lite загружен (WASM).",30);
+  return segmenter;
 }
-
 async function getUpscaler(){
   if(upscaler)return upscaler;
   try{
