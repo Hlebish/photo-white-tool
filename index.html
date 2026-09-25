@@ -156,7 +156,9 @@ function makeOutput(alpha,w,h){
   const sourceX=minX*sourceImage.naturalWidth/w,sourceY=minY*sourceImage.naturalHeight/h;
   const sourceW=cropW*sourceImage.naturalWidth/w,sourceH=cropH*sourceImage.naturalHeight/h;
   const fitW=592,fitH=432,scale=Math.min(fitW/sourceW,fitH/sourceH);
-  const drawW=Math.max(1,Math.round(cropW*scale)),drawH=Math.max(1,Math.round(cropH*scale));
+  // `scale` is calculated in original-image pixels; apply it to the mapped
+  // source crop dimensions, not to the smaller model-mask coordinates.
+  const drawW=Math.max(1,Math.round(sourceW*scale)),drawH=Math.max(1,Math.round(sourceH*scale));
   const fg=document.createElement('canvas');fg.width=drawW;fg.height=drawH;
   const fctx=fg.getContext('2d');fctx.imageSmoothingEnabled=true;fctx.imageSmoothingQuality='high';
   fctx.drawImage(sourceImage,sourceX,sourceY,sourceW,sourceH,0,0,drawW,drawH);
