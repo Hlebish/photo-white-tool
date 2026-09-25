@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Photo White Tool — V24</title>
+<title>Photo White Tool — V28</title>
 <style>
 :root{--bg:#eef1f4;--card:#fff;--ink:#18212b;--muted:#66717d;--line:#d6dde5;--accent:#2e6df6;--danger:#c93636}
 *{box-sizing:border-box}
@@ -40,7 +40,7 @@ canvas.viewer.drag{cursor:grabbing}
 </head>
 <body>
 <div class="wrap">
-  <h1>Photo White Tool — V24 <span class="badge">BiRefNet Lite 512 + умные отверстия</span></h1>
+  <h1>Photo White Tool — V28 <span class="badge">BiRefNet Lite 512 + умная маска</span></h1>
 
   <div class="grid">
     <section class="card">
@@ -96,7 +96,7 @@ canvas.viewer.drag{cursor:grabbing}
     <div class="ctrl"><label>Мягкость маски</label><input id="soft" type="range" min="0" max="4" step="0.1" value="0.4"><output id="softOut">0.4</output></div>
     <div class="ctrl"><label>Кисть (для маски)</label><input id="brush" type="range" min="3" max="180" step="1" value="28"><output id="brushOut">28</output></div>
     <div class="status" id="status">Выбери фотографию и нажми «Обработать».</div>
-    <div class="note">V24 специально не делает искусственную резкость: используются исходные пиксели детали. Новое — автоматическое обнаружение больших «карманов» фона, которые модель ошибочно оставила внутри детали.</div>
+    <div class="note">V28 не делает искусственную резкость: используются исходные пиксели детали. Новое — автоматическое обнаружение больших «карманов» фона, которые модель ошибочно оставила внутри детали.</div>
   </section>
 </div>
 
@@ -251,73 +251,93 @@ async function getSegmenter(){
 function isTensorLike(x){
   return x && x.data && Array.isArray(x.dims) && x.dims.length>=2;
 }
+function channelStats(data,pixels,ch,ci,scale){
+  let min=Infinity,max=-Infinity,sum=0,sum2=0,n=0;
+  const step=Math.max(1,Math.floor(pixels/5000));
+  for(let i=0, p=0; i<pixels; i+=step, p+=step*ch){
+    let v=Number(data[p+ci]); if(!Number.isFinite(v)) continue;
+    v*=scale; min=Math.min(min,v); max=Math.max(max,v); sum+=v; sum2+=v*v; n++;
+  }
+  if(!n) return {min:0,max:0,mean:0,var:0};
+  const mean=sum/n; return {min,max,mean,var:Math.max(0,sum2/n-mean*mean)};
+}
 function maskFromAny(raw,w,h){
-  // Transformers.js may return RawImage or Tensor-like data depending on pipeline/model build.
-  // Normalize both forms to a full-resolution RGBA alpha mask.
+  // Normalize RawImage/Tensor outputs robustly. The model may return:
+  // 1-channel, RGB, or RGBA data, and the alpha channel can be constant 255.
   let mw, mh, d, ch;
   if(raw && Number.isFinite(raw.width) && Number.isFinite(raw.height) && raw.data){
-    mw = raw.width; mh = raw.height; d = raw.data;
-    ch = Number(raw.channels) || Math.max(1, Math.round(d.length/(mw*mh)));
+    mw = Number(raw.width); mh = Number(raw.height); d = raw.data;
+    ch = Number(raw.channels) || Math.round(d.length/(mw*mh));
   } else if(isTensorLike(raw)){
     const dims = raw.dims.map(Number);
     mh = dims[dims.length-2]; mw = dims[dims.length-1]; d = raw.data;
-    ch = 1;
-  } else if(raw && raw.data && Number.isFinite(raw.width) && Number.isFinite(raw.height)){
-    mw=Number(raw.width); mh=Number(raw.height); d=raw.data; ch=1;
+    ch = Math.max(1, Math.round(d.length/(mw*mh)));
   } else {
     throw new Error('Модель вернула маску в неподдерживаемом формате.');
   }
   if(!mw || !mh || !d || !d.length) throw new Error('Маска модели пустая.');
+  if(!Number.isFinite(ch) || ch<1 || ch>4) ch=1;
+  const scale = (()=>{
+    let maxV=0; const step=Math.max(1,Math.floor((d.length/ch)/10000));
+    for(let i=0;i<d.length;i+=step*ch){ const v=Math.abs(Number(d[i])); if(Number.isFinite(v)) maxV=Math.max(maxV,v); }
+    return maxV<=1.5 ? 255 : 1;
+  })();
+  // Pick the channel with the strongest segmentation-like contrast.
+  let bestCi=0,bestScore=-Infinity;
+  const pixels=mw*mh;
+  for(let ci=0;ci<ch;ci++){
+    const st=channelStats(d,pixels,ch,ci,scale);
+    const contrast=Math.abs(st.mean-st.min)+Math.abs(st.max-st.mean);
+    const score=st.var*(0.5+contrast/255);
+    if(score>bestScore){bestScore=score;bestCi=ci;}
+  }
+  // If RGBA alpha is genuinely varying, prefer alpha because background removal masks use it.
+  if(ch>=4){
+    const a=channelStats(d,pixels,ch,3,scale);
+    if(a.max-a.min>8 && a.var>20) bestCi=3;
+  }
   const c=document.createElement('canvas'); c.width=mw; c.height=mh;
-  const ctx=c.getContext('2d');
-  const id=ctx.createImageData(mw,mh);
-  const isFloat = d instanceof Float32Array || d instanceof Float64Array;
-  const scaleFloat = isFloat ? 255 : 1;
-  for(let i=0;i<mw*mh;i++){
-    let v;
-    const p=i*ch;
-    if(ch===1){
-      v=Number(d[p])*scaleFloat;
-    } else if(ch>=4){
-      // For RGBA RawImage masks, alpha is the mask. If alpha is flat, fall back to first channel.
-      const a=Number(d[p+3])*scaleFloat, r=Number(d[p])*scaleFloat;
-      v = (a>1 ? a : r);
-    } else {
-      v=Number(d[p])*scaleFloat;
-    }
-    if(!Number.isFinite(v)) v=0;
+  const ctx=c.getContext('2d'); const id=ctx.createImageData(mw,mh);
+  for(let i=0;i<pixels;i++){
+    const rawV=Number(d[i*ch+bestCi]);
+    let v=Number.isFinite(rawV)?rawV*scale:0;
     v=clamp(v,0,255);
     const q=i*4; id.data[q]=v; id.data[q+1]=v; id.data[q+2]=v; id.data[q+3]=255;
   }
   ctx.putImageData(id,0,0);
   const out=document.createElement('canvas'); out.width=w; out.height=h;
   const octx=out.getContext('2d'); octx.imageSmoothingEnabled=true; octx.imageSmoothingQuality='high'; octx.drawImage(c,0,0,w,h);
-  return octx.getImageData(0,0,w,h).data;
+  const result=octx.getImageData(0,0,w,h).data;
+  // Force the selected grayscale channel into alpha and add a quick sanity check.
+  let nonZero=0,sum=0;
+  for(let i=3;i<result.length;i+=4){ if(result[i]>8) nonZero++; sum+=result[i]; }
+  if(nonZero===0) throw new Error('Модель вернула пустую маску (0 пикселей объекта).');
+  return result;
 }
 
 function normalizeMaskPolarity(alpha,w,h){
-  // Some segmentation exports can return an inverted mask.
-  // Decide from the border: the photo background normally occupies the border,
-  // while the object is mostly inside the frame.
   let borderSum=0,borderN=0,innerSum=0,innerN=0;
-  const bandX=Math.max(2,Math.floor(w*0.06)), bandY=Math.max(2,Math.floor(h*0.06));
-  const ix0=Math.floor(w*0.20), ix1=Math.ceil(w*0.80), iy0=Math.floor(h*0.20), iy1=Math.ceil(h*0.80);
-  for(let y=0;y<h;y++){
-    for(let x=0;x<w;x++){
-      if(x<bandX||x>=w-bandX||y<bandY||y>=h-bandY){
-        borderSum += alpha[(y*w+x)*4+3]; borderN++;
-      } else if(x>=ix0&&x<ix1&&y>=iy0&&y<iy1){
-        innerSum += alpha[(y*w+x)*4+3]; innerN++;
-      }
+  const bandX=Math.max(2,Math.floor(w*0.04)), bandY=Math.max(2,Math.floor(h*0.04));
+  const ix0=Math.floor(w*0.15), ix1=Math.ceil(w*0.85), iy0=Math.floor(h*0.15), iy1=Math.ceil(h*0.85);
+  for(let y=0;y<h;y+=2){
+    for(let x=0;x<w;x+=2){
+      const a=alpha[(y*w+x)*4+3];
+      if(x<bandX||x>=w-bandX||y<bandY||y>=h-bandY){borderSum+=a;borderN++;}
+      else if(x>=ix0&&x<ix1&&y>=iy0&&y<iy1){innerSum+=a;innerN++;}
     }
   }
   const bm=borderN?borderSum/borderN:0, im=innerN?innerSum/innerN:0;
-  if(bm > im + 35){
+  if(bm>im+20){
     const out=new Uint8ClampedArray(alpha.length);
     for(let i=3;i<alpha.length;i+=4) out[i]=255-alpha[i];
     return out;
   }
   return alpha;
+}
+function maskCoverage(alpha){
+  let n=0, hi=0,sum=0;
+  for(let i=3;i<alpha.length;i+=4){ const v=alpha[i]; if(v>8) n++; if(v>220) hi++; sum+=v; }
+  const total=alpha.length/4; return {frac:n/total,hard:hi/total,mean:sum/(total||1)};
 }
 
 function refineThreshold(alpha, strength){
@@ -556,10 +576,24 @@ async function process(){
     const rawMask=best.mask || best;
     let baseMask=maskFromAny(rawMask,srcData.width,srcData.height);
     baseMask=normalizeMaskPolarity(baseMask,srcData.width,srcData.height);
+    let cov=maskCoverage(baseMask);
+    if(cov.frac<0.002){
+      throw new Error('Маска почти пустая. Попробуйте другой браузер или обновите модель.');
+    }
+    if(cov.frac>0.995){
+      const inv=new Uint8ClampedArray(baseMask);
+      for(let i=3;i<inv.length;i+=4) inv[i]=255-inv[i];
+      const invCov=maskCoverage(inv);
+      if(invCov.frac<cov.frac) { baseMask=inv; cov=invCov; }
+    }
     const thresh=Number(ui.threshold.value);
     baseMask=refineThreshold(baseMask,thresh);
     // Safety pass: eliminate large foreground regions connected to the photo border.
     baseMask=removeBorderForeground(baseMask,srcData.width,srcData.height,160);
+    cov=maskCoverage(baseMask);
+    if(cov.frac<0.001){
+      throw new Error('После очистки маска стала пустой. Уменьшите порог объекта.');
+    }
     maskBase=baseMask;
     // Remove large background-looking regions that are trapped inside the object.
     let m=applyHoleCleanup(maskBase,srcData);
@@ -568,7 +602,7 @@ async function process(){
     if(softR>0)m=feather(m,srcData.width,srcData.height,softR);
     maskEdited=m.slice();
     resultPixels=buildResult(maskEdited);
-    status('Готово. Маска нормализована, фон и внутренние отверстия очищены.');
+    status(`Готово. Маска: ${(cov.frac*100).toFixed(1)}% кадра. Фон и отверстия очищены.`);
     fit('res'); draw('res');
   }catch(e){
     console.error(e); status(`Ошибка обработки: ${e?.message||e}`,true); console.error('PROCESS_ERROR', e);
