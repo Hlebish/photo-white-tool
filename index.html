@@ -1,3 +1,4 @@
+
 <!doctype html>
 <html lang="ru">
 <head>
@@ -328,7 +329,8 @@ function connectedComponents(mask,w,h,minArea,bgInfo,srcDataObj,holeStrength){
   const cand=new Uint8Array(aw*ah);
   const visited=new Uint8Array(aw*ah);
   const bg=bgInfo;
-  const alphaMin=0.12 + (1-holeStrength)*0.25;
+  if(!srcDataObj || !srcDataObj.data) throw new Error('Внутренняя ошибка анализа изображения: отсутствуют пиксели исходника.');
+  const alphaMin=0.12 + (1-Number(holeStrength||0))*0.25;
   const tol=Number(ui.bgTol.value);
   for(let ay=0;ay<ah;ay++){
     const y=Math.min(h-1,Math.floor((ay+0.5)*s));
@@ -375,7 +377,7 @@ function applyHoleCleanup(alpha, srcImg){
   const bg=estimateBackground(srcImg,alpha);
   const strength=Number(ui.holes.value)/100;
   if(strength<=0) return alpha;
-  const comp=connectedComponents(alpha,w,h,Number(ui.holeArea.value),bg,strength);
+  const comp=connectedComponents(alpha,w,h,Number(ui.holeArea.value),bg,srcImg,strength);
   const out=new Uint8ClampedArray(alpha.length);
   out.set(alpha);
   for(let ay=0;ay<comp.ah;ay++) for(let ax=0;ax<comp.aw;ax++){
