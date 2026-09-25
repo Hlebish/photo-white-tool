@@ -165,7 +165,12 @@ function makeOutput(alpha,w,h){
   for(let p=0,i=0;p<alpha.length;p++,i+=4){matteImage.data[i]=matteImage.data[i+1]=matteImage.data[i+2]=255;matteImage.data[i+3]=alpha[p];}
   mctx.putImageData(matteImage,0,0);
   fctx.globalCompositeOperation='destination-in';
+  // Supersampled model mattes can still look stepped after the final
+  // 640x480 reduction. A subpixel blur on the alpha only restores antialiasing
+  // without softening the source RGB of the part.
+  fctx.filter='blur(0.7px)';
   fctx.drawImage(matte,minX,minY,cropW,cropH,0,0,drawW,drawH);
+  fctx.filter='none';
   fctx.globalCompositeOperation='source-over';
   const out=document.createElement('canvas');out.width=640;out.height=480;
   const ctx=out.getContext('2d');ctx.fillStyle='#fff';ctx.fillRect(0,0,640,480);
