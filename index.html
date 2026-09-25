@@ -30,6 +30,10 @@
       <span>×</span>
       <input id="outH" type="number" value="480" min="64" max="4000">
       <label><input id="autoFit" type="checkbox" checked> аккуратно вписывать деталь</label>
+      <label><input id="enhance" type="checkbox" checked> ✨ AI-улучшение (Swin2SR ×2)</label>
+      <label>Формат:
+        <select id="format"><option value="jpeg" selected>JPG — качество 98%</option><option value="png">PNG — без потерь</option></select>
+      </label>
     </div>
 
     <div class="actions">
@@ -43,7 +47,7 @@
   </div>
 
   <div id="grid" class="grid"></div>
-  <div class="footer">Локальная обработка в браузере • Transformers.js • RMBG-1.4</div>
+  <div class="footer">Локальная обработка в браузере • RMBG-1.4 • необязательное AI-улучшение Swin2SR</div>
 </div>
 
 <script type="module">
@@ -52,8 +56,8 @@ import JSZip from 'https://cdn.jsdelivr.net/npm/jszip@3.10.1/+esm';
 
 const $=id=>document.getElementById(id);
 const drop=$('drop'), filesEl=$('files'), processBtn=$('process'), zipBtn=$('downloadZip'), clearBtn=$('clear');
-const status=$('status'), bar=$('bar'), grid=$('grid'), outW=$('outW'), outH=$('outH'), autoFit=$('autoFit');
-let files=[], results=[], pipe=null, loading=false;
+const status=$('status'), bar=$('bar'), grid=$('grid'), outW=$('outW'), outH=$('outH'), autoFit=$('autoFit'), enhance=$('enhance'), format=$('format');
+let files=[], results=[], pipe=null, srPipe=null, loading=false;
 
 function setStatus(t,p=null){status.textContent=t;if(p!==null)bar.style.width=Math.max(0,Math.min(100,p))+'%'}
 function esc(s){return s.replace(/[&<>'"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[c]))}
@@ -133,6 +137,51 @@ async function getPipe(){
 
 function loadImage(file){return new Promise((resolve,reject)=>{const im=new Image();im.onload=()=>resolve(im);im.onerror=reject;im.src=URL.createObjectURL(file)})}
 
+async function getSRPipe(){
+  if(srPipe)return srPipe;
+  setStatus('Загружаю модель улучшения Swin2SR… это только первый раз.',0);
+  let device='wasm';
+  try{
+    if(navigator.gpu){const adapter=await navigator.gpu.requestAdapter();if(adapter)device='webgpu'}
+  }catch(e){console.warn('WebGPU недоступен для Swin2SR:',e)}
+  try{
+    srPipe=await pipeline('image-to-image','Xenova/swin2SR-classical-sr-x2-64',{
+      device,
+      progress_callback:p=>{
+        if(p.status==='progress'&&typeof p.progress==='number') setStatus(`Загрузка AI-улучшения: ${Math.round(p.progress)}%`,p.progress);
+      }
+    });
+    return srPipe;
+  }catch(e){
+    if(device==='webgpu'){
+      console.warn('Swin2SR WebGPU не запустился, переключаюсь на WASM.',e);
+      srPipe=await pipeline('image-to-image','Xenova/swin2SR-classical-sr-x2-64',{device:'wasm'});
+      return srPipe;
+    }
+    throw e;
+  }
+}
+
+function canvasToBlob(canvas,type='image/png',quality=1){return new Promise((resolve,reject)=>canvas.toBlob(b=>b?resolve(b):reject(new Error('Не удалось создать изображение')),type,quality))}
+
+async function upscaleRGB(srcCanvas, alphaCanvas){
+  const sr=await getSRPipe();
+  // AI получает RGB на белом фоне. Маску альфа сохраняем отдельно, поэтому модель не может
+  // «дорисовать» форму детали или изменить её контур. Она улучшает только цвет/текстуру RGB.
+  const rgb=document.createElement('canvas');rgb.width=srcCanvas.width;rgb.height=srcCanvas.height;
+  const rctx=rgb.getContext('2d');rctx.fillStyle='#fff';rctx.fillRect(0,0,rgb.width,rgb.height);rctx.drawImage(srcCanvas,0,0);
+  const input=await canvasToBlob(rgb,'image/png');
+  const raw=await sr(input);
+  const out=Array.isArray(raw)?raw[0]:raw;
+  const enhanced=typeof out.toCanvas==='function'?out.toCanvas():await rawToCanvas(out);
+  // Маска увеличиваем обычным качественным ресэмплингом — без AI, чтобы силуэт детали не менялся.
+  const mask=document.createElement('canvas');mask.width=enhanced.width;mask.height=enhanced.height;
+  const mctx=mask.getContext('2d');mctx.imageSmoothingEnabled=true;mctx.imageSmoothingQuality='high';mctx.drawImage(alphaCanvas,0,0,mask.width,mask.height);
+  const composed=document.createElement('canvas');composed.width=enhanced.width;composed.height=enhanced.height;
+  const ctx=composed.getContext('2d');ctx.drawImage(enhanced,0,0);ctx.globalCompositeOperation='destination-in';ctx.drawImage(mask,0,0);ctx.globalCompositeOperation='source-over';
+  return composed;
+}
+
 async function processOne(file,index,total){
   setStatus(`AI обрабатывает ${index+1} из ${total}: ${file.name}`,(index/total)*100);
   // Transformers.js 3.x принимает Blob/File напрямую. HTMLImageElement
@@ -140,10 +189,27 @@ async function processOne(file,index,total){
   const raw=await pipe(file);
   const cut=Array.isArray(raw)?raw[0]:raw;
   // Transformers.js RawImage exposes toCanvas().
-  const cutCanvas=typeof cut.toCanvas==='function' ? cut.toCanvas() : await rawToCanvas(cut);
+  let cutCanvas=typeof cut.toCanvas==='function' ? cut.toCanvas() : await rawToCanvas(cut);
+  // Сохраняем маску отдельно, чтобы улучшение никогда не меняло геометрию детали.
+  let alphaCanvas=document.createElement('canvas');alphaCanvas.width=cutCanvas.width;alphaCanvas.height=cutCanvas.height;
+  const actx=alphaCanvas.getContext('2d');actx.drawImage(cutCanvas,0,0);
+
+  if(enhance.checked){
+    try{
+      setStatus(`✨ Улучшаю качество ${index+1} из ${total}: ${file.name}`,(index/total)*100);
+      cutCanvas=await upscaleRGB(cutCanvas,alphaCanvas);
+    }catch(e){
+      console.warn('AI-улучшение не сработало — сохраняю исходную детализацию без него.',e);
+    }
+  }
+
   const finalCanvas=compose(cutCanvas,Number(outW.value)||640,Number(outH.value)||480,autoFit.checked);
-  const blob=await new Promise(r=>finalCanvas.toBlob(r,'image/jpeg',0.94));
-  const base=file.name.replace(/\.[^.]+$/,'')+'_white_640x480.jpg';
+  const isPng=format.value==='png';
+  const mime=isPng?'image/png':'image/jpeg';
+  const quality=isPng?1:0.98;
+  const blob=await canvasToBlob(finalCanvas,mime,quality);
+  const ext=isPng?'png':'jpg';
+  const base=file.name.replace(/\.[^.]+$/,'')+`_white_640x480.${ext}`;
   return {name:base,blob,url:URL.createObjectURL(blob)};
 }
 
