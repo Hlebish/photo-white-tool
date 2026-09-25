@@ -82,6 +82,7 @@ button,select{font:inherit;padding:10px 13px;border:1px solid var(--line);border
 // "Failed to resolve module specifier 'onnxruntime-web'".
 let rembg = null;
 let aiLoadPromise = null;
+const sessionCache = new Map();
 async function loadAI(){
   if(rembg) return rembg;
   if(aiLoadPromise) return aiLoadPromise;
@@ -146,7 +147,15 @@ async function removeBg(file){
   const model=$("model").value;
   setStatus("Подготавливаю "+model+"…",5);
   const ai=await loadAI();
-  const session=ai.newSession(model);
+  let session=sessionCache.get(model);
+  if(!session){
+    setStatus("Инициализирую AI-модель…",10);
+    session=await ai.newSession(model);
+    if(!session || typeof session.predict!=="function") {
+      throw new Error("AI-сессия создана некорректно (predict недоступен).");
+    }
+    sessionCache.set(model,session);
+  }
   const result=await ai.remove(file,{
     session,
     onlyMask:true,
