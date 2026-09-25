@@ -66,18 +66,40 @@ button,select{font:inherit;padding:10px 13px;border:1px solid var(--line);border
 <div class="note"><b>Важно:</b> фото не отправляется на твой сервер. AI работает в браузере. Первый запуск выбранной модели потребует её загрузки. Для максимального качества оставь ISNet. Для проверки на слабом ПК можно выбрать U²-NetP.</div>
 </main></div>
 
-<script src="https://cdn.jsdelivr.net/npm/onnxruntime-web@1.23.0/dist/ort.min.js"></script>
+<!-- Важно: rembg-web импортирует пакет "onnxruntime-web" как bare module.
+     В обычном браузере GitHub Pages такой импорт не разрешается без import map. -->
+<script type="importmap">
+{
+  "imports": {
+    "onnxruntime-web": "https://cdn.jsdelivr.net/npm/onnxruntime-web@1.23.0/dist/ort.bundle.min.mjs"
+  }
+}
+</script>
 
-<script>
-// UMD-вариант: интерфейс продолжает работать даже если AI-библиотека загрузится с ошибкой.
+<script type="module">
+// Загружаем ORT и rembg-web только после того, как браузер знает, куда
+// разрешать импорт "onnxruntime-web". Это устраняет ошибку
+// "Failed to resolve module specifier 'onnxruntime-web'".
 let rembg = null;
 let aiLoadPromise = null;
 async function loadAI(){
   if(rembg) return rembg;
   if(aiLoadPromise) return aiLoadPromise;
-  aiLoadPromise = import("https://unpkg.com/@bunnio/rembg-web@1.0.2/dist/index.js")
-    .then(m=>{ rembg=m; rembg.rembgConfig.setBaseUrl("https://huggingface.co/bunnio/dis_anime/resolve/main"); return rembg; })
-    .catch(e=>{ console.error("AI module load failed",e); throw new Error("Не удалось загрузить AI-модуль. Проверь интернет или блокировку CDN."); });
+  aiLoadPromise = (async()=>{
+    const ort = await import("onnxruntime-web");
+    // ORT ищет WASM рядом с JS-файлом. Мы используем CDN, поэтому
+    // явно указываем папку CDN с WASM-файлами.
+    if(ort.env && ort.env.wasm){
+      ort.env.wasm.wasmPaths = "https://cdn.jsdelivr.net/npm/onnxruntime-web@1.23.0/dist/";
+    }
+    const m = await import("https://unpkg.com/@bunnio/rembg-web@1.0.2/dist/index.js");
+    rembg = m;
+    rembg.rembgConfig.setBaseUrl("https://huggingface.co/bunnio/dis_anime/resolve/main");
+    return rembg;
+  })().catch(e=>{
+    console.error("AI module load failed",e);
+    throw new Error("Не удалось загрузить AI-модуль: "+(e?.message||e));
+  });
   return aiLoadPromise;
 }
 loadAI().catch(()=>{});
