@@ -401,6 +401,21 @@ function maskBorderCoverage(alpha,w,h){
   return foreground/(total||1);
 }
 
+function buildColorFallbackMask(srcImg){
+  const {width:w,height:h,data}=srcImg;
+  const bg=estimateBackground(srcImg,null);
+  const threshold=Math.max(24,Number(ui.bgTol.value));
+  const band=Math.max(8,threshold*0.18);
+  const mask=new Uint8ClampedArray(w*h*4);
+  for(let i=0;i<data.length;i+=4){
+    const distance=colorDist(data[i],data[i+1],data[i+2],bg);
+    const alpha=clamp((distance-(threshold-band))/(2*band),0,1);
+    mask[i+3]=Math.round(alpha*255);
+  }
+  removeBorderForeground(mask,w,h,120);
+  return keepLargestForegroundComponent(mask,w,h,160);
+}
+
 function keepLargestForegroundComponent(alpha,w,h,minArea=200){
   const step=Math.max(1,Math.ceil(Math.max(w,h)/900)), aw=Math.ceil(w/step), ah=Math.ceil(h/step);
   const fg=new Uint8Array(aw*ah), vis=new Uint8Array(aw*ah), qx=new Int32Array(aw*ah), qy=new Int32Array(aw*ah);
@@ -676,8 +691,15 @@ async function process(){
       const inverseBorder=inverseResult?maskBorderCoverage(inverseResult.mask,srcData.width,srcData.height):1;
       if(inverseResult&&(!thresholdResult||inverseBorder<normalBorder*0.75))thresholdResult=inverseResult;
     }
+    let usedColorFallback=false;
     if(!thresholdResult){
-      throw new Error('Модель не смогла отделить деталь от фона: маска пуста или покрывает почти весь кадр. Попробуйте другой снимок с большим отступом вокруг детали.');
+      const fallbackMask=buildColorFallbackMask(srcData);
+      const fallbackCoverage=maskCoverage(fallbackMask).frac;
+      if(fallbackCoverage<0.001||fallbackCoverage>0.98){
+        throw new Error('ИИ не смог отделить деталь от фона, а цветовой запасной режим не нашёл объект. Попробуйте фото с более ровным и контрастным фоном.');
+      }
+      thresholdResult={mask:fallbackMask,threshold:thresh};
+      usedColorFallback=true;
     }
     baseMask=thresholdResult.mask;
     let cov=maskCoverage(baseMask);
@@ -714,7 +736,7 @@ async function process(){
     }
     maskEdited=m.slice();
     resultPixels=buildResult(maskEdited);
-    const thresholdNote=thresholdResult.threshold===thresh?'':` Порог автоматически изменён до ${thresholdResult.threshold.toFixed(2)}.`;
+    const thresholdNote=usedColorFallback?' ИИ-маска заменена цветовым выделением по фону.':thresholdResult.threshold===thresh?'':` Порог автоматически изменён до ${thresholdResult.threshold.toFixed(2)}.`;
     status(`Готово. Маска: ${(finalCoverage*100).toFixed(1)}% кадра. Фон и отверстия очищены.${thresholdNote}`);
     fit('res'); draw('res');
   }catch(e){
