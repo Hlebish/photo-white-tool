@@ -85,9 +85,10 @@ canvas.viewer.drag{cursor:grabbing}
       <button id="process" class="primary">Обработать</button>
       <button id="resetMask">Сбросить ручные правки</button>
       <button id="downloadPng">Скачать PNG 640×480</button>
+      <button id="downloadFullPng">Скачать PNG в исходном разрешении</button>
     </div>
     <div class="sep"></div>
-    <div class="ctrl"><label>Порог объекта</label><input id="threshold" type="range" min="0.10" max="0.80" step="0.01" value="0.34"><output id="thresholdOut">0.34</output></div>
+    <div class="ctrl"><label>Порог объекта</label><input id="threshold" type="range" min="0.03" max="0.80" step="0.01" value="0.34"><output id="thresholdOut">0.34</output></div>
     <div class="ctrl"><label>Чёткость края</label><input id="edge" type="range" min="0" max="100" step="1" value="72"><output id="edgeOut">72</output></div>
     <div class="ctrl"><label>Удаление серых теней</label><input id="shadow" type="range" min="0" max="100" step="1" value="55"><output id="shadowOut">55</output></div>
     <div class="ctrl"><label>Очистка отверстий</label><input id="holes" type="range" min="0" max="100" step="1" value="85"><output id="holesOut">85</output></div>
@@ -112,6 +113,7 @@ const ui = {
   status:$('status'), fitSrc:$('fitSrc'), src100:$('src100'), srcPlus:$('srcPlus'), srcMinus:$('srcMinus'),
   fitRes:$('fitRes'), res100:$('res100'), resPlus:$('resPlus'), resMinus:$('resMinus'),
   showMask:$('showMask'), resetMask:$('resetMask'), downloadPng:$('downloadPng'),
+  downloadFullPng:$('downloadFullPng'),
   threshold:$('threshold'), edge:$('edge'), shadow:$('shadow'), holes:$('holes'), holeArea:$('holeArea'), bgTol:$('bgTol'), soft:$('soft'), brush:$('brush')
 };
 
@@ -360,6 +362,26 @@ function refineThreshold(alpha, strength){
   return out;
 }
 
+function makeUsableThresholdMask(alpha,w,h,requested){
+  // BiRefNet confidence can be much lower than usual on dark, reflective,
+  // or tightly cropped parts. Retry progressively softer cutoffs before failing.
+  const candidates=[];
+  for(let t=requested;t>=0.03;t-=0.05) candidates.push(Math.max(0.03,Number(t.toFixed(2))));
+  if(!candidates.includes(0.03)) candidates.push(0.03);
+  let best=null;
+  for(const threshold of candidates){
+    const candidate=refineThreshold(alpha,threshold);
+    const coverage=maskCoverage(candidate);
+    if(coverage.frac>=0.001 && coverage.frac<=0.98){
+      // Prefer the requested threshold when it yields a nontrivial object.
+      return {mask:candidate,threshold,coverage};
+    }
+    if(!best || coverage.frac>best.coverage.frac) best={mask:candidate,threshold,coverage};
+  }
+  if(best && best.coverage.frac>=0.001) return best;
+  return null;
+}
+
 function keepLargestForegroundComponent(alpha,w,h,minArea=200){
   const step=Math.max(1,Math.ceil(Math.max(w,h)/900)), aw=Math.ceil(w/step), ah=Math.ceil(h/step);
   const fg=new Uint8Array(aw*ah), vis=new Uint8Array(aw*ah), qx=new Int32Array(aw*ah), qy=new Int32Array(aw*ah);
@@ -593,6 +615,24 @@ function buildResult(alpha){
   return o.getImageData(0,0,640,480);
 }
 
+function buildFullResolutionResult(alpha){
+  const {width:w,height:h}=srcData;
+  const out=document.createElement('canvas');out.width=w;out.height=h;
+  const ctx=out.getContext('2d');
+  const image=ctx.createImageData(w,h);
+  for(let i=0;i<alpha.length;i+=4){
+    image.data[i]=srcData.data[i];
+    image.data[i+1]=srcData.data[i+1];
+    image.data[i+2]=srcData.data[i+2];
+    image.data[i+3]=alpha[i+3];
+  }
+  ctx.putImageData(image,0,0);
+  // Composite transparent background to pure white without resampling source pixels.
+  const white=document.createElement('canvas');white.width=w;white.height=h;
+  const wctx=white.getContext('2d');wctx.fillStyle='#fff';wctx.fillRect(0,0,w,h);wctx.drawImage(out,0,0);
+  return white;
+}
+
 async function process(){
   if(!srcImage||!srcData){status('Сначала выбери фотографию.',true);return}
   ui.process.disabled=true;
@@ -607,9 +647,6 @@ async function process(){
     let baseMask=maskFromAny(rawMask,srcData.width,srcData.height);
     baseMask=normalizeMaskPolarity(baseMask,srcData.width,srcData.height);
     let cov=maskCoverage(baseMask);
-    if(cov.frac<0.002){
-      throw new Error('Маска почти пустая. Попробуйте другой браузер или обновите модель.');
-    }
     if(cov.frac>0.995){
       const inv=new Uint8ClampedArray(baseMask);
       for(let i=3;i<inv.length;i+=4) inv[i]=255-inv[i];
@@ -617,7 +654,11 @@ async function process(){
       if(invCov.frac<cov.frac) { baseMask=inv; cov=invCov; }
     }
     const thresh=Number(ui.threshold.value);
-    baseMask=refineThreshold(baseMask,thresh);
+    const thresholdResult=makeUsableThresholdMask(baseMask,srcData.width,srcData.height,thresh);
+    if(!thresholdResult){
+      throw new Error(`Не удалось выделить объект даже при минимальном пороге 0.03. Проверьте, что деталь целиком видна и отличается от фона. Исходный порог: ${thresh.toFixed(2)}.`);
+    }
+    baseMask=thresholdResult.mask;
     // Keep the main object instead of deleting every border-connected region.
     // This is safer for parts whose soft mask touches the photo edge.
     const beforeComponent=baseMask.slice();
@@ -637,12 +678,18 @@ async function process(){
     // Never let automatic hole cleanup destroy the object.
     const preCov=maskCoverage(preHole).frac, postHoleCov=maskCoverage(m).frac;
     if(postHoleCov < preCov*0.35) m=preHole;
+    const preEdgeCleanup=m;
     m=softenAndShadowClean(m,srcData);
     const softR=Number(ui.soft.value);
     if(softR>0)m=feather(m,srcData.width,srcData.height,softR);
+    if(maskCoverage(m).frac<0.001){
+      m=preEdgeCleanup;
+      status('Автоочистка слишком сузила маску; восстановлена маска до очистки краёв.');
+    }
     maskEdited=m.slice();
     resultPixels=buildResult(maskEdited);
-    status(`Готово. Маска: ${(cov.frac*100).toFixed(1)}% кадра. Фон и отверстия очищены.`);
+    const thresholdNote=thresholdResult.threshold<thresh?` Порог автоматически снижен до ${thresholdResult.threshold.toFixed(2)}.`:'';
+    status(`Готово. Маска: ${(cov.frac*100).toFixed(1)}% кадра. Фон и отверстия очищены.${thresholdNote}`);
     fit('res'); draw('res');
   }catch(e){
     console.error(e); status(`Ошибка обработки: ${e?.message||e}`,true); console.error('PROCESS_ERROR', e);
@@ -708,6 +755,11 @@ ui.downloadPng.addEventListener('click',()=>{
   if(!resultPixels){status('Сначала обработай фотографию.',true);return}
   const c=document.createElement('canvas');c.width=640;c.height=480;c.getContext('2d').putImageData(resultPixels,0,0);
   c.toBlob(b=>{const a=document.createElement('a');a.href=URL.createObjectURL(b);a.download='photo-640x480.png';a.click();setTimeout(()=>URL.revokeObjectURL(a.href),1000)},'image/png');
+});
+ui.downloadFullPng.addEventListener('click',()=>{
+  if(!maskEdited||!srcData){status('Сначала обработай фотографию.',true);return;}
+  const c=buildFullResolutionResult(maskEdited);
+  c.toBlob(b=>{if(!b){status('Не удалось создать PNG.',true);return;}const a=document.createElement('a');a.href=URL.createObjectURL(b);a.download=`photo-cutout-${srcData.width}x${srcData.height}.png`;a.click();setTimeout(()=>URL.revokeObjectURL(a.href),1000)},'image/png');
 });
 window.addEventListener('resize',()=>{fit('src');fit('res')});
 </script>
