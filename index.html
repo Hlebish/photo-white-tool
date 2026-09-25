@@ -1,0 +1,146 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Фото деталей — белый фон 640×480</title>
+<style>
+:root{--bg:#f3f4f6;--card:#fff;--ink:#18212b;--muted:#68727d;--line:#dfe3e8;--accent:#1769ff;--ok:#159447;--danger:#c62828}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--ink);font-family:Inter,system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif}
+.app{max-width:1100px;margin:auto;padding:20px 16px 40px}.head{display:flex;justify-content:space-between;gap:16px;align-items:center;margin-bottom:18px}.title h1{font-size:24px;margin:0 0 5px}.title p{margin:0;color:var(--muted);font-size:14px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:18px;padding:18px;box-shadow:0 8px 30px #00000008}.drop{border:2px dashed #b8c0ca;border-radius:16px;padding:34px 18px;text-align:center;cursor:pointer;transition:.2s;background:#fafbfc}.drop:hover,.drop.drag{border-color:var(--accent);background:#f4f8ff}.drop strong{display:block;font-size:18px}.drop span{display:block;color:var(--muted);margin-top:7px;font-size:14px}.actions{display:flex;flex-wrap:wrap;gap:10px;margin-top:14px}.btn{border:0;border-radius:12px;padding:11px 15px;font-weight:700;cursor:pointer;font-size:14px;background:#e9edf2;color:var(--ink)}.btn.primary{background:var(--accent);color:white}.btn.green{background:var(--ok);color:white}.btn:disabled{opacity:.45;cursor:not-allowed}.status{margin-top:14px;color:var(--muted);font-size:14px}.progress{height:8px;background:#e8ebef;border-radius:99px;overflow:hidden;margin-top:8px}.bar{height:100%;width:0;background:var(--accent);transition:width .2s}.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:14px;margin-top:18px}.item{border:1px solid var(--line);border-radius:15px;overflow:hidden;background:white}.preview{aspect-ratio:4/3;background:#fff;display:flex;align-items:center;justify-content:center;position:relative}.preview img{width:100%;height:100%;object-fit:contain}.badge{position:absolute;left:8px;top:8px;background:#fff;border:1px solid var(--line);border-radius:999px;padding:5px 8px;font-size:11px}.itembody{padding:11px}.name{font-size:13px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.small{font-size:12px;color:var(--muted);margin-top:4px}.item .actions{margin-top:9px}.item .btn{flex:1;padding:9px 8px}.empty{text-align:center;color:var(--muted);padding:25px}.tip{margin-top:15px;padding:12px 14px;border-radius:12px;background:#f6f8fa;font-size:13px;color:#59636e}.settings{display:flex;gap:14px;align-items:center;flex-wrap:wrap;margin-top:15px}.settings label{font-size:13px;color:var(--muted)}.settings input{width:76px;padding:8px;border:1px solid var(--line);border-radius:9px}.footer{margin-top:16px;text-align:center;color:#89919a;font-size:12px}@media(max-width:600px){.app{padding:12px 10px 30px}.head{align-items:flex-start}.title h1{font-size:20px}.card{padding:12px}.drop{padding:28px 12px}.grid{grid-template-columns:1fr}.actions .btn{flex:1}.settings{gap:8px}}
+</style>
+</head>
+<body>
+<div class="app">
+  <div class="head">
+    <div class="title"><h1>📸 Фото деталей</h1><p>Убрать бетонный фон → белый фон → 640×480</p></div>
+  </div>
+
+  <div class="card">
+    <div id="drop" class="drop">
+      <strong>Перетащи фотографии сюда</strong>
+      <span>или нажми, чтобы выбрать. Можно выбрать сразу несколько.</span>
+      <input id="files" type="file" accept="image/*" multiple hidden>
+    </div>
+
+    <div class="settings">
+      <label>Размер результата:</label>
+      <input id="outW" type="number" value="640" min="64" max="4000">
+      <span>×</span>
+      <input id="outH" type="number" value="480" min="64" max="4000">
+      <label><input id="autoFit" type="checkbox" checked> аккуратно вписывать деталь</label>
+    </div>
+
+    <div class="actions">
+      <button id="process" class="btn primary" disabled>✨ Обработать</button>
+      <button id="downloadZip" class="btn green" disabled>⬇ Скачать всё ZIP</button>
+      <button id="clear" class="btn" disabled>Очистить</button>
+    </div>
+    <div id="status" class="status">Готово. Выбери фотографии.</div>
+    <div class="progress"><div id="bar" class="bar"></div></div>
+    <div class="tip">💡 Первый запуск может быть долгим: браузер один раз скачает AI-модель (около сотен МБ). После этого модель обычно берётся из кэша браузера. Фотографии для обработки на сервер не отправляются.</div>
+  </div>
+
+  <div id="grid" class="grid"></div>
+  <div class="footer">Локальная обработка в браузере • Transformers.js • RMBG-1.4</div>
+</div>
+
+<script type="module">
+import { pipeline } from 'https://cdn.jsdelivr.net/npm/@huggingface/transformers@3.8.1/+esm';
+import JSZip from 'https://cdn.jsdelivr.net/npm/jszip@3.10.1/+esm';
+
+const $=id=>document.getElementById(id);
+const drop=$('drop'), filesEl=$('files'), processBtn=$('process'), zipBtn=$('downloadZip'), clearBtn=$('clear');
+const status=$('status'), bar=$('bar'), grid=$('grid'), outW=$('outW'), outH=$('outH'), autoFit=$('autoFit');
+let files=[], results=[], pipe=null, loading=false;
+
+function setStatus(t,p=null){status.textContent=t;if(p!==null)bar.style.width=Math.max(0,Math.min(100,p))+'%'}
+function esc(s){return s.replace(/[&<>'"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[c]))}
+function refresh(){processBtn.disabled=!files.length||loading; clearBtn.disabled=!files.length&&!results.length; zipBtn.disabled=!results.length;}
+
+function addFiles(list){
+  const incoming=[...list].filter(f=>f.type.startsWith('image/'));
+  files=[...files,...incoming];
+  renderQueue(); refresh();
+  setStatus(`Выбрано: ${files.length} фото`);
+}
+
+drop.onclick=()=>filesEl.click();
+filesEl.onchange=e=>{addFiles(e.target.files);filesEl.value=''};
+['dragenter','dragover'].forEach(ev=>drop.addEventListener(ev,e=>{e.preventDefault();drop.classList.add('drag')}));
+['dragleave','drop'].forEach(ev=>drop.addEventListener(ev,e=>{e.preventDefault();drop.classList.remove('drag')}));
+drop.addEventListener('drop',e=>addFiles(e.dataTransfer.files));
+
+function renderQueue(){
+  grid.innerHTML='';
+  files.forEach((f,i)=>{
+    const d=document.createElement('div');d.className='item';d.innerHTML=`<div class="preview"><span class="badge">В очереди</span><img src="${URL.createObjectURL(f)}"></div><div class="itembody"><div class="name">${esc(f.name)}</div><div class="small">${Math.round(f.size/1024)} КБ</div></div>`;grid.appendChild(d);
+  });
+}
+
+async function getPipe(){
+  if(pipe)return pipe;
+  setStatus('Загрузка AI-модели… это только первый раз.',0);
+  pipe=await pipeline('background-removal','briaai/RMBG-1.4',{
+    device: navigator.gpu ? 'webgpu' : 'wasm',
+    progress_callback: p=>{
+      if(p.status==='progress' && typeof p.progress==='number') setStatus(`Загрузка AI-модели: ${Math.round(p.progress)}%`,p.progress);
+    }
+  });
+  return pipe;
+}
+
+function loadImage(file){return new Promise((resolve,reject)=>{const im=new Image();im.onload=()=>resolve(im);im.onerror=reject;im.src=URL.createObjectURL(file)})}
+
+async function processOne(file,index,total){
+  const img=await loadImage(file);
+  setStatus(`AI обрабатывает ${index+1} из ${total}: ${file.name}`,(index/total)*100);
+  const raw=await pipe(img);
+  const cut=Array.isArray(raw)?raw[0]:raw;
+  // Transformers.js RawImage exposes toCanvas().
+  const cutCanvas=typeof cut.toCanvas==='function' ? cut.toCanvas() : await rawToCanvas(cut);
+  const finalCanvas=compose(cutCanvas,Number(outW.value)||640,Number(outH.value)||480,autoFit.checked);
+  const blob=await new Promise(r=>finalCanvas.toBlob(r,'image/jpeg',0.94));
+  const base=file.name.replace(/\.[^.]+$/,'')+'_white_640x480.jpg';
+  return {name:base,blob,url:URL.createObjectURL(blob)};
+}
+
+async function rawToCanvas(raw){
+  const c=document.createElement('canvas');c.width=raw.width;c.height=raw.height;const ctx=c.getContext('2d');const d=raw.data;const img=ctx.createImageData(c.width,c.height);
+  if(d.length===c.width*c.height*4) img.data.set(d); else {for(let i=0,j=0;i<d.length;i+=3,j+=4){img.data[j]=d[i];img.data[j+1]=d[i+1];img.data[j+2]=d[i+2];img.data[j+3]=255}}
+  ctx.putImageData(img,0,0);return c;
+}
+
+function compose(src,W,H,fit){
+  const c=document.createElement('canvas');c.width=W;c.height=H;const ctx=c.getContext('2d');ctx.fillStyle='#fff';ctx.fillRect(0,0,W,H);
+  let sx=0,sy=0,sw=src.width,sh=src.height;
+  if(fit){
+    // Find alpha bounding box so the object is centered and not surrounded by the original concrete margins.
+    const scan=document.createElement('canvas');scan.width=src.width;scan.height=src.height;const sctx=scan.getContext('2d');sctx.drawImage(src,0,0);const data=sctx.getImageData(0,0,scan.width,scan.height).data;
+    let minX=src.width,minY=src.height,maxX=-1,maxY=-1;
+    for(let y=0;y<src.height;y+=2)for(let x=0;x<src.width;x+=2){if(data[(y*src.width+x)*4+3]>25){if(x<minX)minX=x;if(y<minY)minY=y;if(x>maxX)maxX=x;if(y>maxY)maxY=y}}
+    if(maxX>=minX){sx=Math.max(0,minX-8);sy=Math.max(0,minY-8);sw=Math.min(src.width-sx,maxX-minX+16);sh=Math.min(src.height-sy,maxY-minY+16)}
+  }
+  const scale=Math.min(W/sw,H/sh)*0.90;const dw=sw*scale,dh=sh*scale;const dx=(W-dw)/2,dy=(H-dh)/2;
+  ctx.imageSmoothingEnabled=true;ctx.imageSmoothingQuality='high';ctx.drawImage(src,sx,sy,sw,sh,dx,dy,dw,dh);return c;
+}
+
+function renderResults(){
+  grid.innerHTML='';
+  results.forEach((r,i)=>{const d=document.createElement('div');d.className='item';d.innerHTML=`<div class="preview"><span class="badge">640×480</span><img src="${r.url}"></div><div class="itembody"><div class="name">${esc(r.name)}</div><div class="small">Белый фон • JPG</div><div class="actions"><button class="btn green" data-i="${i}">⬇ Скачать</button></div></div>`;grid.appendChild(d)});
+  grid.querySelectorAll('button').forEach(b=>b.onclick=()=>downloadResult(results[+b.dataset.i]));
+}
+function downloadResult(r){const a=document.createElement('a');a.href=r.url;a.download=r.name;a.click()}
+
+processBtn.onclick=async()=>{
+  if(loading||!files.length)return;loading=true;results=[];refresh();
+  try{await getPipe();for(let i=0;i<files.length;i++){try{results.push(await processOne(files[i],i,files.length));renderResults()}catch(e){console.error(e)}}setStatus(`Готово: ${results.length} из ${files.length} фото`,100)}catch(e){console.error(e);setStatus('Ошибка загрузки AI-модели. Открой консоль браузера для подробностей.')}finally{loading=false;refresh()}
+};
+
+zipBtn.onclick=async()=>{if(!results.length)return;zipBtn.disabled=true;setStatus('Собираю ZIP…');const zip=new JSZip();results.forEach(r=>zip.file(r.name,r.blob));const blob=await zip.generateAsync({type:'blob'});const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='photos_white_640x480.zip';a.click();zipBtn.disabled=false;setStatus('ZIP готов.',100)};
+clearBtn.onclick=()=>{files=[];results.forEach(r=>URL.revokeObjectURL(r.url));results=[];grid.innerHTML='';bar.style.width='0';setStatus('Готово. Выбери фотографии.');refresh()};
+refresh();
+</script>
+</body>
+</html>
