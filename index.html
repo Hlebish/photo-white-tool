@@ -58,7 +58,7 @@ env.useBrowserCache=true;
 const MODEL_ID='onnx-community/BEN2-ONNX';
 const $=id=>document.getElementById(id);
 const ui={file:$('file'),source:$('sourceCanvas'),result:$('resultCanvas'),process:$('process'),download:$('download'),mask:$('maskButton'),cutoff:$('cutoff'),cutoffValue:$('cutoffValue'),status:$('status'),progress:$('progressBar')};
-let sourceImage=null,sourcePreview=null,sourceData=null,sourceUrl=null,maskData=null,resultCanvas=null,segmenter=null,loading=null,showingMask=false;
+let sourceImage=null,sourceUrl=null,maskData=null,maskWidth=0,maskHeight=0,resultCanvas=null,segmenter=null,loading=null,showingMask=false;
 
 function setStatus(message,type=''){
   ui.status.textContent=message;
@@ -86,13 +86,9 @@ function loadPhoto(file){
   const img=new Image();
   img.onload=()=>{
     sourceImage=img;
-    const c=document.createElement('canvas');c.width=img.naturalWidth;c.height=img.naturalHeight;
-    const ctx=c.getContext('2d',{willReadFrequently:true});ctx.drawImage(img,0,0);
-    sourcePreview=c;
-    sourceData=ctx.getImageData(0,0,c.width,c.height);
-    maskData=null;resultCanvas=null;showingMask=false;ui.download.disabled=true;ui.mask.disabled=true;
-    fitCanvas(ui.source,sourcePreview);fitCanvas(ui.result,null);ui.process.disabled=false;
-    setProgress(0);setStatus(`Фото загружено: ${c.width}×${c.height}. Нажми «Удалить фон и сделать 640×480».`);
+    maskData=null;maskWidth=0;maskHeight=0;resultCanvas=null;showingMask=false;ui.download.disabled=true;ui.mask.disabled=true;
+    fitCanvas(ui.source,sourceImage);fitCanvas(ui.result,null);ui.process.disabled=false;
+    setProgress(0);setStatus(`Фото загружено: ${img.naturalWidth}×${img.naturalHeight}. Нажми «Удалить фон и сделать 640×480».`);
   };
   img.onerror=()=>setStatus('Не удалось открыть фото. Выбери JPEG, PNG или WebP.','error');
   img.src=sourceUrl;
@@ -110,12 +106,11 @@ async function getSegmenter(){
   return loading;
 }
 
-function readMask(raw,w,h){
+function readMask(raw){
   if(!raw||typeof raw.toCanvas!=='function')throw new Error('BEN2 вернула изображение маски в неизвестном формате.');
   const modelCanvas=raw.toCanvas();
-  const c=document.createElement('canvas');c.width=w;c.height=h;
-  const ctx=c.getContext('2d',{willReadFrequently:true});
-  ctx.imageSmoothingEnabled=true;ctx.imageSmoothingQuality='high';ctx.drawImage(modelCanvas,0,0,w,h);
+  const w=modelCanvas.width,h=modelCanvas.height;
+  const ctx=modelCanvas.getContext('2d',{willReadFrequently:true});
   const rgba=ctx.getImageData(0,0,w,h).data;
   let minA=255,maxA=0;
   for(let i=3;i<rgba.length;i+=4){minA=Math.min(minA,rgba[i]);maxA=Math.max(maxA,rgba[i]);}
@@ -132,7 +127,7 @@ function readMask(raw,w,h){
   // The model output should be transparent around the subject. Correct an
   // inverted matte only when the image border is clearly more foreground-like.
   if(bn&&inN&&border/bn>inner/inN+24){for(let i=0;i<alpha.length;i++)alpha[i]=255-alpha[i];}
-  return alpha;
+  return {alpha,width:w,height:h};
 }
 
 function cleanMatte(input,w,h,cutoff){
@@ -147,8 +142,7 @@ function cleanMatte(input,w,h,cutoff){
 
 function matteCoverage(alpha){let n=0;for(const a of alpha)if(a>32)n++;return n/alpha.length;}
 
-function makeOutput(alpha){
-  const w=sourceData.width,h=sourceData.height;
+function makeOutput(alpha,w,h){
   let minX=w,minY=h,maxX=-1,maxY=-1;
   for(let y=0;y<h;y++)for(let x=0;x<w;x++)if(alpha[y*w+x]>24){
     if(x<minX)minX=x;if(x>maxX)maxX=x;if(y<minY)minY=y;if(y>maxY)maxY=y;
@@ -159,33 +153,50 @@ function makeOutput(alpha){
   const pad=Math.round(Math.min(maxX-minX+1,maxY-minY+1)*.035);
   minX=Math.max(0,minX-pad);minY=Math.max(0,minY-pad);maxX=Math.min(w-1,maxX+pad);maxY=Math.min(h-1,maxY+pad);
   const cropW=maxX-minX+1,cropH=maxY-minY+1;
-  const fitW=592,fitH=432,scale=Math.min(fitW/cropW,fitH/cropH);
+  const sourceX=minX*sourceImage.naturalWidth/w,sourceY=minY*sourceImage.naturalHeight/h;
+  const sourceW=cropW*sourceImage.naturalWidth/w,sourceH=cropH*sourceImage.naturalHeight/h;
+  const fitW=592,fitH=432,scale=Math.min(fitW/sourceW,fitH/sourceH);
   const drawW=Math.max(1,Math.round(cropW*scale)),drawH=Math.max(1,Math.round(cropH*scale));
-  const fg=document.createElement('canvas');fg.width=w;fg.height=h;
-  const fctx=fg.getContext('2d');const rgba=fctx.createImageData(w,h);
-  for(let i=0,p=0;i<sourceData.data.length;i+=4,p++){
-    rgba.data[i]=sourceData.data[i];rgba.data[i+1]=sourceData.data[i+1];rgba.data[i+2]=sourceData.data[i+2];rgba.data[i+3]=alpha[p];
-  }
-  fctx.putImageData(rgba,0,0);
+  const fg=document.createElement('canvas');fg.width=drawW;fg.height=drawH;
+  const fctx=fg.getContext('2d');fctx.imageSmoothingEnabled=true;fctx.imageSmoothingQuality='high';
+  fctx.drawImage(sourceImage,sourceX,sourceY,sourceW,sourceH,0,0,drawW,drawH);
+  const matte=document.createElement('canvas');matte.width=w;matte.height=h;
+  const mctx=matte.getContext('2d');const matteImage=mctx.createImageData(w,h);
+  for(let p=0,i=0;p<alpha.length;p++,i+=4){matteImage.data[i]=matteImage.data[i+1]=matteImage.data[i+2]=255;matteImage.data[i+3]=alpha[p];}
+  mctx.putImageData(matteImage,0,0);
+  fctx.globalCompositeOperation='destination-in';
+  fctx.drawImage(matte,minX,minY,cropW,cropH,0,0,drawW,drawH);
+  fctx.globalCompositeOperation='source-over';
   const out=document.createElement('canvas');out.width=640;out.height=480;
   const ctx=out.getContext('2d');ctx.fillStyle='#fff';ctx.fillRect(0,0,640,480);
   ctx.imageSmoothingEnabled=true;ctx.imageSmoothingQuality='high';
-  ctx.drawImage(fg,minX,minY,cropW,cropH,(640-drawW)/2,(480-drawH)/2,drawW,drawH);
+  ctx.drawImage(fg,(640-drawW)/2,(480-drawH)/2);
   return {canvas:out,coverage};
 }
 
+async function makeModelInputUrl(img){
+  const scale=Math.min(1,1024/Math.max(img.naturalWidth,img.naturalHeight));
+  const c=document.createElement('canvas');c.width=Math.max(1,Math.round(img.naturalWidth*scale));c.height=Math.max(1,Math.round(img.naturalHeight*scale));
+  const ctx=c.getContext('2d');ctx.imageSmoothingEnabled=true;ctx.imageSmoothingQuality='high';ctx.drawImage(img,0,0,c.width,c.height);
+  const blob=await new Promise(resolve=>c.toBlob(resolve,'image/jpeg',0.94));
+  if(!blob)throw new Error('Не удалось подготовить уменьшенную копию фото для модели.');
+  return URL.createObjectURL(blob);
+}
+
 async function processPhoto(){
-  if(!sourceImage||!sourceData)return;
+  if(!sourceImage)return;
   ui.process.disabled=true;ui.download.disabled=true;ui.mask.disabled=true;setProgress(0);setStatus('Подготавливаю BEN2…');
   try{
     const model=await getSegmenter();
     setStatus('BEN2 анализирует деталь и отделяет фон…');
-    const output=await model([sourceUrl]);
+    const modelUrl=await makeModelInputUrl(sourceImage);
+    let output;
+    try{output=await model([modelUrl]);}finally{URL.revokeObjectURL(modelUrl);}
     if(!output?.length)throw new Error('BEN2 не вернула результат.');
-    const rawAlpha=readMask(output[0],sourceData.width,sourceData.height);
-    const alpha=cleanMatte(rawAlpha,sourceData.width,sourceData.height,Number(ui.cutoff.value));
-    const result=makeOutput(alpha);
-    maskData=alpha;resultCanvas=result.canvas;showingMask=false;
+    const raw=readMask(output[0]);
+    const alpha=cleanMatte(raw.alpha,raw.width,raw.height,Number(ui.cutoff.value));
+    const result=makeOutput(alpha,raw.width,raw.height);
+    maskData=alpha;maskWidth=raw.width;maskHeight=raw.height;resultCanvas=result.canvas;showingMask=false;
     fitCanvas(ui.result,resultCanvas);ui.download.disabled=false;ui.mask.disabled=false;setProgress(100);
     setStatus(`Готово: PNG 640×480. Деталь занимает ${(result.coverage*100).toFixed(1)}% исходного кадра; фон белый.`,'success');
   }catch(error){
@@ -200,7 +211,7 @@ ui.mask.addEventListener('click',()=>{
   if(!maskData)return;
   showingMask=!showingMask;
   if(!showingMask){fitCanvas(ui.result,resultCanvas);ui.mask.textContent='Показать маску';return;}
-  const w=sourceData.width,h=sourceData.height,c=document.createElement('canvas');c.width=w;c.height=h;
+  const w=maskWidth,h=maskHeight,c=document.createElement('canvas');c.width=w;c.height=h;
   const ctx=c.getContext('2d'),image=ctx.createImageData(w,h);
   for(let p=0,i=0;p<maskData.length;p++,i+=4){image.data[i]=image.data[i+1]=image.data[i+2]=maskData[p];image.data[i+3]=255;}
   ctx.putImageData(image,0,0);fitCanvas(ui.result,c);ui.mask.textContent='Показать результат';
@@ -212,9 +223,9 @@ ui.download.addEventListener('click',()=>{
     const url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download='part-640x480.png';a.click();setTimeout(()=>URL.revokeObjectURL(url),1500);
   },'image/png');
 });
-window.addEventListener('resize',()=>{fitCanvas(ui.source,sourcePreview);fitCanvas(ui.result,showingMask&&maskData?makeMaskPreview():resultCanvas);});
+window.addEventListener('resize',()=>{fitCanvas(ui.source,sourceImage);fitCanvas(ui.result,showingMask&&maskData?makeMaskPreview():resultCanvas);});
 function makeMaskPreview(){
-  const c=document.createElement('canvas');c.width=sourceData.width;c.height=sourceData.height;
+  const c=document.createElement('canvas');c.width=maskWidth;c.height=maskHeight;
   const ctx=c.getContext('2d'),image=ctx.createImageData(c.width,c.height);
   for(let p=0,i=0;p<maskData.length;p++,i+=4){image.data[i]=image.data[i+1]=image.data[i+2]=maskData[p];image.data[i+3]=255;}
   ctx.putImageData(image,0,0);return c;
