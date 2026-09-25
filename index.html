@@ -10,7 +10,7 @@
 .controls{display:flex;gap:9px;align-items:center;flex-wrap:wrap;margin-top:14px}button,select{font:inherit;padding:10px 13px;border:1px solid var(--line);border-radius:10px;background:#fff;cursor:pointer}button.primary{background:var(--blue);border-color:var(--blue);color:#fff;font-weight:700}button.active{border-color:var(--blue);color:var(--blue);background:#f1f6ff}button:disabled{opacity:.45;cursor:not-allowed}
 .status{margin-top:12px;color:var(--muted);min-height:22px}.status.err{color:var(--red);font-weight:600}.status.ok{color:var(--green);font-weight:600}.progress{height:7px;background:#e8edf2;border-radius:99px;overflow:hidden}.bar{height:100%;width:0;background:var(--blue);transition:width .2s}
 .grid{display:grid;grid-template-columns:1fr 1fr;gap:15px;margin-top:18px}.pane{border:1px solid var(--line);border-radius:14px;overflow:hidden}.pane h2{font-size:14px;margin:0;padding:10px 12px;border-bottom:1px solid var(--line)}
-.preview{min-height:330px;height:520px;padding:12px;display:flex;align-items:center;justify-content:center;background:repeating-conic-gradient(#f0f2f4 0 25%,#fff 0 50%) 50%/22px 22px;overflow:hidden}.preview canvas{display:block;width:auto;height:auto;max-width:100%;max-height:100%;object-fit:contain}
+.preview{min-height:330px;height:520px;padding:12px;display:flex;align-items:center;justify-content:center;background:repeating-conic-gradient(#f0f2f4 0 25%,#fff 0 50%) 50%/22px 22px;overflow:hidden}.preview canvas{display:block;width:100%;height:100%;object-fit:contain;image-rendering:auto}
 .editor-head{display:flex;gap:7px;align-items:center;flex-wrap:wrap;border-bottom:1px solid var(--line);padding:8px 10px;background:#fbfcfd}.editor-head button{padding:7px 10px}.zoom-label{font-size:13px;color:var(--muted);min-width:48px;text-align:center}.editor{height:480px;overflow:auto;touch-action:none;cursor:crosshair;background:#f2f4f7;display:flex;align-items:flex-start;justify-content:flex-start}.editor-inner{padding:18px;min-width:max-content;min-height:max-content}.editor canvas{width:640px;height:480px;display:block;box-shadow:0 2px 12px #0001;transform-origin:top left}
 .tools{border-top:1px solid var(--line);padding:10px 12px;display:flex;gap:8px;align-items:center;flex-wrap:wrap}.tools label{font-size:13px;color:var(--muted)}
 .tuning{margin-top:15px;padding:12px;background:var(--soft);border:1px solid var(--line);border-radius:12px}.tuning-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}.tuning label{display:block;font-size:13px;color:var(--muted)}.tuning input[type=range]{width:100%}.value{font-weight:700;color:var(--ink)}
@@ -22,7 +22,7 @@
 <body>
 <div class="wrap"><main class="card">
 <h1>Фото деталей → чистый белый фон → 640×480</h1>
-<div class="sub">V18 • стабильный background-removal pipeline • исходные пиксели детали сохраняются • редактор с приближением</div>
+<div class="sub">V19 • BiRefNet FP32/WASM + устойчивый fallback • исходные пиксели детали сохраняются • редактор с приближением</div>
 
 <label id="drop" class="drop"><div><strong>📷 Нажми или перетащи фотографии сюда</strong><span>Можно выбрать сразу несколько JPG / PNG / WebP</span></div><input id="files" type="file" accept="image/jpeg,image/png,image/webp" multiple></label>
 
@@ -66,7 +66,7 @@
 </div>
 
 <div id="queue" class="queue"></div>
-<div class="note"><b>Почему V18:</b> убран прямой ручной вызов ONNX BiRefNet, который у тебя падал с 240595976. Теперь BiRefNet Lite запускается через официальный <code>background-removal</code> pipeline; его репозиторий также документирует этот путь. Маска берётся из альфа-канала результата, а не усреднением RGB. Для ORMBG автоматически выбирается доступный 8-битный вариант; BEN2 оставлен как отдельный экспериментальный режим.</div>
+<div class="note"><b>Почему V19:</b> BiRefNet на WASM теперь запускается только в FP32 через <code>image-segmentation</code>; FP16 отключён, потому что твоя консоль показывает отсутствие CPU-ядер для части FP16-графа. ORMBG использует 8-битный fallback, BEN2 — FP32. Вход модели передаётся как URL, а формат маски разбирается отдельно для segmentation/background-removal. Предупреждения constant_folding сами по себе не являются ошибкой выполнения.</div>
 </main></div>
 
 <script type="module">
@@ -87,25 +87,30 @@ drop.onclick=()=>filesEl.click();drop.ondragover=e=>{e.preventDefault();drop.cla
 
 async function getBiRefNet(){
   if(birefPromise)return birefPromise;
-  setStatus('Загружаю BiRefNet Lite…',8);
-  birefPromise=pipeline('background-removal','onnx-community/BiRefNet_lite-ONNX',{device:'wasm',dtype:'fp16',progress_callback:i=>{const p=Number(i?.progress)||0;if(p>0)setStatus(`Загрузка BiRefNet… ${Math.round(p)}%`,Math.min(58,10+p*.48))}})
-    .catch(async e=>{
-      console.warn('BiRefNet fp16 failed, fallback fp32',e);
-      setStatus('BiRefNet FP16 не запустился — пробую FP32…',18);
-      return await pipeline('background-removal','onnx-community/BiRefNet_lite-ONNX',{device:'wasm',dtype:'fp32',progress_callback:i=>{const p=Number(i?.progress)||0;if(p>0)setStatus(`Загрузка BiRefNet FP32… ${Math.round(p)}%`,Math.min(58,10+p*.48))}});
-    });
+  setStatus('Загружаю BiRefNet Lite (FP32)…',8);
+  // IMPORTANT: on WASM we deliberately avoid FP16 here. The browser CPU backend
+  // can load the FP16 graph but still fail on unsupported FP16 kernels during execution.
+  // The model card officially exposes BiRefNet_lite-ONNX through image-segmentation.
+  birefPromise=pipeline('image-segmentation','onnx-community/BiRefNet_lite-ONNX',{
+    device:'wasm',dtype:'fp32',
+    progress_callback:i=>{const p=Number(i?.progress)||0;if(p>0)setStatus(`Загрузка BiRefNet FP32… ${Math.round(p)}%`,Math.min(58,10+p*.48))}
+  });
   try{return await birefPromise}catch(e){birefPromise=null;throw e}
 }
 async function getORMBG(){
   if(ormbPromise)return ormbPromise;
   setStatus('Загружаю ORMBG…',8);
   ormbPromise=(async()=>{
-    const dtypes=['q8','int8','uint8','fp16','fp32'];
+    // Prefer an actual 8-bit graph for WASM. The Hub currently exposes quantized ORMBG variants.
+    const dtypes=['q8','int8','uint8','fp32'];
     let lastErr=null;
     for(const dtype of dtypes){
       try{
         setStatus(`ORMBG: пробую ${dtype.toUpperCase()}…`,12);
-        return await pipeline('background-removal','onnx-community/ormbg-ONNX',{device:'wasm',dtype,progress_callback:i=>{const p=Number(i?.progress)||0;if(p>0)setStatus(`Загрузка ORMBG ${dtype.toUpperCase()}… ${Math.round(p)}%`,Math.min(58,10+p*.48))}});
+        return await pipeline('background-removal','onnx-community/ormbg-ONNX',{
+          device:'wasm',dtype,
+          progress_callback:i=>{const p=Number(i?.progress)||0;if(p>0)setStatus(`Загрузка ORMBG ${dtype.toUpperCase()}… ${Math.round(p)}%`,Math.min(58,10+p*.48))}
+        });
       }catch(e){lastErr=e;console.warn(`ORMBG ${dtype} failed`,e)}
     }
     throw lastErr||new Error('ORMBG не загрузился.');
@@ -115,7 +120,11 @@ async function getORMBG(){
 async function getBEN2(){
   if(ben2Promise)return ben2Promise;
   setStatus('Загружаю BEN2…',8);
-  ben2Promise=pipeline('background-removal','onnx-community/BEN2-ONNX',{device:'wasm',dtype:'fp16',progress_callback:i=>{const p=Number(i?.progress)||0;if(p>0)setStatus(`Загрузка BEN2… ${Math.round(p)}%`,Math.min(58,10+p*.48))}});
+  // Keep BEN2 on FP32/WASM as the safe browser path; no FP16 attempt.
+  ben2Promise=pipeline('background-removal','onnx-community/BEN2-ONNX',{
+    device:'wasm',dtype:'fp32',
+    progress_callback:i=>{const p=Number(i?.progress)||0;if(p>0)setStatus(`Загрузка BEN2 FP32… ${Math.round(p)}%`,Math.min(58,10+p*.48))}
+  });
   try{return await ben2Promise}catch(e){ben2Promise=null;throw e}
 }
 function rawImageToGray(raw){
@@ -139,9 +148,18 @@ async function pipelineMask(file,loader,label){
   const u=URL.createObjectURL(file);
   try{
     setStatus(`${label}: строю маску…`,62);
+    // Use a URL string as input. This is the browser path documented by Transformers.js
+    // and avoids passing the File object directly into ONNX.
     const r=await seg(u);
-    const mask=r?.[0]??r;
-    if(!mask)throw new Error(`${label} не вернул маску.`);
+    let mask=null;
+    if(Array.isArray(r)){
+      // image-segmentation => [{ label, score, mask: RawImage }]
+      mask=r.find(x=>x?.mask)?.mask ?? r[0]?.mask ?? r[0];
+    }else{
+      // background-removal => [RawImage] in current Transformers.js
+      mask=r?.mask ?? r;
+    }
+    if(!mask || !mask.data || !mask.width || !mask.height) throw new Error(`${label}: неожиданный формат маски.`);
     return rawImageToGray(mask);
   }finally{URL.revokeObjectURL(u)}
 }
