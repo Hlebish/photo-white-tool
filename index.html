@@ -1,4 +1,4 @@
-<!doctype html>
+=<!doctype html>
 <html lang="ru">
 <head>
 <meta charset="utf-8">
@@ -22,7 +22,7 @@
 <body>
 <div class="wrap"><main class="card">
 <h1>Фото деталей → чистый белый фон → 640×480</h1>
-<div class="sub">V21 • BiRefNet Lite 512 browser-ready • исходные пиксели детали сохраняются • редактор с приближением</div>
+<div class="sub">V23 • Adobe-style workflow • точный край • умные отверстия • ручная доработка маски • зум</div>
 
 <label id="drop" class="drop"><div><strong>📷 Нажми или перетащи фотографии сюда</strong><span>Можно выбрать сразу несколько JPG / PNG / WebP</span></div><input id="files" type="file" accept="image/jpeg,image/png,image/webp" multiple></label>
 
@@ -34,7 +34,7 @@
 <option value="ormbg">ORMBG • резерв</option>
 </select></label>
 <label>Вывод:<select id="format"><option value="png">PNG — без потерь</option><option value="jpg">JPG 100%</option></select></label>
-<button id="download" disabled>Скачать</button>
+<button id="download" disabled>Скачать</button><button id="showMask" disabled>Показать маску</button>
 </div>
 
 <div class="tuning">
@@ -42,9 +42,11 @@
 <label>Порог маски: <span id="thrVal" class="value">34%</span><input id="thr" type="range" min="10" max="60" value="34"></label>
 <label>Защита края: <span id="edgeVal" class="value">6 px</span><input id="edge" type="range" min="1" max="16" value="6"></label>
 <label>Удаление серого фона: <span id="shadowVal" class="value">55%</span><input id="shadow" type="range" min="0" max="100" value="55"></label>
-<label>Мягкость контура: <span id="featherVal" class="value">0.3 px</span><input id="feather" type="range" min="0" max="12" value="3"></label>
+<label>Очистка отверстий: <span id="holeVal" class="value">75%</span><input id="hole" type="range" min="0" max="100" value="75"></label>
+<label>Мягкость контура: <span id="featherVal" class="value">0.2 px</span><input id="feather" type="range" min="0" max="12" value="2"></label>
+<label>Чёткость края: <span id="clarityVal" class="value">72%</span><input id="clarity" type="range" min="0" max="100" value="72"></label>
 </div>
-<div style="margin-top:8px;color:var(--muted);font-size:13px">Для первого теста: <b>BiRefNet Lite 512</b>, порог 34%, защита края 6 px, удаление серого фона 55%, мягкость 0.3 px.</div>
+<div style="margin-top:8px;color:var(--muted);font-size:13px">Рекомендуется: <b>BiRefNet Lite 512</b> • порог 34% • защита края 6 px • серый фон 55% • отверстия 75% • мягкость 0.2 px • чёткость края 72%. После изменения ползунков нажми «Обработать» заново.</div>
 </div>
 
 <div id="status" class="status">Выбери фотографию.</div><div class="progress"><div id="bar" class="bar"></div></div>
@@ -64,7 +66,7 @@
 </div>
 
 <div id="queue" class="queue"></div>
-<div class="note"><b>Почему V21:</b> предыдущий BiRefNet 1024×1024 больше не используется. Браузерный вариант <code>studioludens/birefnet-lite-512</code> специально экспортирован на 512×512 для запуска в ONNX Runtime Web; исходная 1024-модель в браузере упирается в память. V21 загружает модель напрямую через <code>AutoModel + AutoProcessor + RawImage</code>, как в примере модели, и получает чистую логит-маску. Саму фотографию AI не перерисовывает.</div>
+<div class="note"><b>V23:</b> логика построена по принципу редакторов вроде Adobe Express: AI делает исходную маску, затем отдельный этап уточняет край, убирает фоновые тени и проверяет внутренние отверстия. Автоматическое удаление не заменяет ручную кисть: «Ластик» и «Восстановить» теперь меняют маску <b>исходного изображения</b>, а результат пересобирается из оригинальных пикселей. Это позволяет править край на увеличении, не пережёвывая деталь повторным AI-рендером.</div>
 </main></div>
 
 <script type="module">
@@ -74,8 +76,8 @@ env.allowRemoteModels=true;
 env.useBrowserCache=true;
 
 const $=id=>document.getElementById(id);
-const filesEl=$('files'),drop=$('drop'),processBtn=$('process'),statusEl=$('status'),bar=$('bar'),src=$('src'),out=$('out'),queue=$('queue'),editor=$('editor'),editorInner=$('editorInner');
-let files=[],current=-1,baseCanvas=null,workMode='erase',zoom=1,spaceDown=false,drawing=false,panning=false,lastPan={x:0,y:0};
+const filesEl=$('files'),drop=$('drop'),processBtn=$('process'),statusEl=$('status'),bar=$('bar'),src=$('src'),out=$('out'),queue=$('queue'),editor=$('editor'),editorInner=$('editorInner'),showMaskBtn=$('showMask');
+let files=[],current=-1,state=null,workMode='erase',zoom=1,spaceDown=false,drawing=false,panning=false,lastPan={x:0,y:0}; let showMask=false;
 let birefModelPromise=null,birefProcessorPromise=null,ormbPromise=null;
 
 function setStatus(text,p=null,kind=''){
@@ -98,10 +100,19 @@ function canvasOfImage(im){
   c.getContext('2d').drawImage(im,0,0);
   return c;
 }
+function fitSourcePreview(){
+  if(!src.width||!src.height)return;
+  const box=src.parentElement;
+  if(!box)return;
+  const aw=Math.max(40,box.clientWidth-24), ah=Math.max(40,box.clientHeight-24);
+  const s=Math.min(1,aw/src.width,ah/src.height);
+  src.style.width=Math.round(src.width*s)+'px';
+  src.style.height=Math.round(src.height*s)+'px';
+}
 async function showSource(file){
   const im=await loadImage(file);
   src.width=im.naturalWidth||im.width;src.height=im.naturalHeight||im.height;
-  const c=src.getContext('2d');c.clearRect(0,0,src.width,src.height);c.drawImage(im,0,0);
+  const c=src.getContext('2d');c.clearRect(0,0,src.width,src.height);c.drawImage(im,0,0);fitSourcePreview();
 }
 function setFiles(list){
   files=[...list];current=files.length?0:-1;queue.innerHTML='';
@@ -263,89 +274,244 @@ function largestComponent(seed,w,h){
   for(let i=0;i<w*h;i++)if(labels[i]===maxLabel)main[i]=1;
   return main;
 }
+function bgLuma(r,g,b){return 0.2126*r+0.7152*g+0.0722*b}
+function bgSaturation(r,g,b){const mx=Math.max(r,g,b),mn=Math.min(r,g,b);return mx?((mx-mn)/mx):0}
+function findBackgroundComponents(pix,w,h,bg,strength){
+  const s=strength/100;
+  if(s<=0)return [];
+  const refL=bgLuma(bg[0],bg[1],bg[2]);
+  const tol=18+105*s;
+  const satTol=0.16-0.10*s;
+  const lumaTol=24+55*s;
+  const cand=new Uint8Array(w*h);
+  for(let i=0,p=0;i<w*h;i++,p+=4){
+    const r=pix[p],g=pix[p+1],b=pix[p+2];
+    const cd=dist3(r,g,b,bg);
+    const ld=Math.abs(bgLuma(r,g,b)-refL);
+    const lowSat=bgSaturation(r,g,b)<=Math.max(0.035,satTol);
+    if(cd<=tol && ld<=lumaTol && lowSat)cand[i]=1;
+  }
+  const seen=new Uint8Array(w*h),q=new Int32Array(w*h),comps=[];
+  const minArea=Math.max(240,Math.round(w*h*(0.00018+0.0014*s)));
+  for(let i=0;i<w*h;i++){
+    if(!cand[i]||seen[i])continue;
+    let head=0,tail=0,count=0,touchesBorder=false,sumD=0;
+    q[tail++]=i;seen[i]=1;
+    while(head<tail){
+      const idx=q[head++];count++;
+      const y=(idx/w)|0,x=idx-y*w;
+      if(x===0||y===0||x===w-1||y===h-1)touchesBorder=true;
+      const p=idx*4;sumD+=dist3(pix[p],pix[p+1],pix[p+2],bg);
+      if(x>0){const n=idx-1;if(cand[n]&&!seen[n]){seen[n]=1;q[tail++]=n}}
+      if(x<w-1){const n=idx+1;if(cand[n]&&!seen[n]){seen[n]=1;q[tail++]=n}}
+      if(y>0){const n=idx-w;if(cand[n]&&!seen[n]){seen[n]=1;q[tail++]=n}}
+      if(y<h-1){const n=idx+w;if(cand[n]&&!seen[n]){seen[n]=1;q[tail++]=n}}
+    }
+    if(count>=minArea && !touchesBorder)comps.push({indices:Array.from(q.slice(0,count)),avgDist:sumD/count});
+  }
+  return comps;
+}
+function smoothstep(a,b,x){
+  const t=Math.max(0,Math.min(1,(x-a)/(b-a)));
+  return t*t*(3-2*t);
+}
 function makeAlpha(raw,original){
   const {gray,w,h}=raw;
-  const threshold=Math.round(Number($('thr').value)*2.55);
-  const protect=Number($('edge').value);
+  const threshold=Number($('thr').value)/100;
+  const protect=Math.max(1,Number($('edge').value));
   const shadowStrength=Number($('shadow').value)/100;
-  const ctx=original.getContext('2d',{willReadFrequently:true});
-  const pix=ctx.getImageData(0,0,w,h).data;
-  // Use a medium-confidence seed to find the real object, then allow a thin halo
-  // of weaker alpha around that object so small dark/metallic edges are not chopped.
-  const seed=new Uint8Array(w*h);
-  const seedT=Math.max(80,threshold);
-  for(let i=0;i<gray.length;i++)if(gray[i]>=seedT)seed[i]=1;
-  let main=largestComponent(seed,w,h);
-  if(!main.some(v=>v)){for(let i=0;i<gray.length;i++)main[i]=gray[i]>=threshold?1:0;}
-  const allowed=new Uint8Array(w*h),dist=new Uint16Array(w*h);
-  dist.fill(65535);
-  const q=new Int32Array(w*h);let head=0,tail=0;
-  for(let i=0;i<w*h;i++)if(main[i]){allowed[i]=1;dist[i]=0;q[tail++]=i}
-  while(head<tail){
-    const idx=q[head++],d=dist[idx];
-    if(d>=protect)continue;
-    const y=(idx/w)|0,x=idx-y*w;
-    const ns=[];
-    if(x>0)ns.push(idx-1);if(x<w-1)ns.push(idx+1);if(y>0)ns.push(idx-w);if(y<h-1)ns.push(idx+w);
-    for(const n of ns){
-      if(dist[n]===65535 && gray[n]>=Math.max(35,threshold-55)){dist[n]=d+1;allowed[n]=1;q[tail++]=n}
-    }
-  }
+  const holeStrength=Number($('hole').value)/100;
+  const clarity=Number($('clarity').value)/100;
+  const pix=original.getContext('2d',{willReadFrequently:true}).getImageData(0,0,w,h).data;
   const bg=sampleBackground(original);
-  const out=new Uint8ClampedArray(w*h);
-  for(let i=0,p=0;i<out.length;i++,p+=4){
-    if(!allowed[i] || gray[i]<Math.max(18,threshold-70)){out[i]=0;continue}
-    let a=gray[i];
-    if(a<255 && shadowStrength>0){
-      const cd=dist3(pix[p],pix[p+1],pix[p+2],bg);
-      const bgLike=Math.max(0,1-cd/120);
-      // only suppress weak boundary alpha; strong object pixels remain untouched
-      const suppress=shadowStrength*bgLike*Math.max(0,1-a/255);
-      a=Math.round(a*(1-suppress));
-    }
-    out[i]=Math.max(0,Math.min(255,a));
+
+  // 1) Find the main foreground seed from the model and keep nearby uncertain pixels.
+  const seed=new Uint8Array(w*h);
+  const seedT=Math.max(0.58,threshold+0.10);
+  for(let i=0;i<w*h;i++) if(gray[i]/255>=seedT) seed[i]=1;
+  let main=largestComponent(seed,w,h);
+  if(!main.some(Boolean)){
+    for(let i=0;i<w*h;i++) if(gray[i]/255>=threshold) main[i]=1;
   }
-  return {alpha:out,w,h,bg};
+  const allowed=new Uint8Array(w*h);
+  const dist=new Int16Array(w*h); dist.fill(-1);
+  const q=new Int32Array(w*h); let head=0,tail=0;
+  for(let i=0;i<w*h;i++) if(main[i]){allowed[i]=1;dist[i]=0;q[tail++]=i;}
+  const minModel=Math.max(0.03,threshold-0.34);
+  while(head<tail){
+    const idx=q[head++],d=dist[idx]; if(d>=protect) continue;
+    const y=(idx/w)|0,x=idx-y*w;
+    const add=(n)=>{
+      if(dist[n]!==-1)return;
+      const m=gray[n]/255;
+      if(m<minModel)return;
+      dist[n]=d+1; allowed[n]=1; q[tail++]=n;
+    };
+    if(x>0)add(idx-1); if(x<w-1)add(idx+1); if(y>0)add(idx-w); if(y<h-1)add(idx+w);
+  }
+
+  // 2) Refine uncertain pixels using original-image contrast against sampled background.
+  const alpha=new Uint8ClampedArray(w*h);
+  const refL=bgLuma(bg[0],bg[1],bg[2]);
+  const high=Math.min(1,threshold+0.22), low=Math.max(0.02,threshold-0.22);
+  const edgeGate=20 + (1-clarity)*45;
+  for(let i=0,p=0;i<w*h;i++,p+=4){
+    if(!allowed[i]){alpha[i]=0;continue;}
+    const m=gray[i]/255;
+    const cd=dist3(pix[p],pix[p+1],pix[p+2],bg);
+    const colorScore=smoothstep(18,118,cd);
+    const lum=bgLuma(pix[p],pix[p+1],pix[p+2]);
+    const lumDelta=Math.abs(lum-refL);
+    let v=m*0.72 + colorScore*0.28;
+    if(m<=low) v*=0.20;
+    else if(m>=high) v=0.97*Math.max(v,m);
+    // Local edge strength: object/background boundaries get a crisper transition.
+    const x=i%w, y=(i/w)|0;
+    let g=0;
+    if(x>0){const n=(p-4);g+=Math.abs(lum-bgLuma(pix[n],pix[n+1],pix[n+2]));}
+    if(x<w-1){const n=(p+4);g+=Math.abs(lum-bgLuma(pix[n],pix[n+1],pix[n+2]));}
+    if(y>0){const n=p-4*w;g+=Math.abs(lum-bgLuma(pix[n],pix[n+1],pix[n+2]));}
+    if(y<h-1){const n=p+4*w;g+=Math.abs(lum-bgLuma(pix[n],pix[n+1],pix[n+2]));}
+    g*=0.25;
+    if(g>edgeGate && clarity>0){
+      const c=smoothstep(0.22,0.78,v);
+      v=v*(1-0.45*clarity)+c*(0.45*clarity);
+    }
+    // Suppress low-confidence grey/low-saturation shadow pixels while keeping dark high-contrast edges.
+    const sat=bgSaturation(pix[p],pix[p+1],pix[p+2]);
+    const bgLike=Math.max(0,1-cd/110)*Math.max(0,1-lumDelta/90);
+    if(shadowStrength>0 && m<0.78 && sat<0.16){
+      v*=Math.max(0,1-shadowStrength*0.72*bgLike);
+    }
+    alpha[i]=Math.max(0,Math.min(255,Math.round(v*255)));
+  }
+
+  // 3) Remove border-connected background shadows with low model confidence.
+  const bgCandidate=new Uint8Array(w*h);
+  const cut=Math.max(28,Math.round(115-55*shadowStrength));
+  for(let i=0,p=0;i<w*h;i++,p+=4){
+    const a=alpha[i];
+    const cd=dist3(pix[p],pix[p+1],pix[p+2],bg);
+    if(a<=cut && cd<115) bgCandidate[i]=1;
+  }
+  const seen=new Uint8Array(w*h),fq=new Int32Array(w*h); let fh=0,ft=0;
+  const pushBorder=(idx)=>{ if(bgCandidate[idx] && !seen[idx]){seen[idx]=1;fq[ft++]=idx;} };
+  for(let x=0;x<w;x++){pushBorder(x);pushBorder((h-1)*w+x);} for(let y=0;y<h;y++){pushBorder(y*w);pushBorder(y*w+w-1);}
+  while(fh<ft){
+    const idx=fq[fh++],y=(idx/w)|0,x=idx-y*w;
+    const add=n=>{if(bgCandidate[n]&&!seen[n]){seen[n]=1;fq[ft++]=n;}};
+    if(x>0)add(idx-1);if(x<w-1)add(idx+1);if(y>0)add(idx-w);if(y<h-1)add(idx+w);
+  }
+  for(let i=0;i<w*h;i++) if(seen[i]) alpha[i]=0;
+
+  // 4) True enclosed holes: low-alpha regions NOT connected to image borders.
+  const lowHole=new Uint8Array(w*h); const holeCut=Math.round(98-38*holeStrength);
+  for(let i=0;i<w*h;i++) if(alpha[i]<holeCut) lowHole[i]=1;
+  const hSeen=new Uint8Array(w*h),hq=new Int32Array(w*h); let hh=0,ht=0;
+  const hp=(idx)=>{if(lowHole[idx]&&!hSeen[idx]){hSeen[idx]=1;hq[ht++]=idx;}};
+  for(let x=0;x<w;x++){hp(x);hp((h-1)*w+x);} for(let y=0;y<h;y++){hp(y*w);hp(y*w+w-1);}
+  while(hh<ht){
+    const idx=hq[hh++],y=(idx/w)|0,x=idx-y*w; const add=n=>{if(lowHole[n]&&!hSeen[n]){hSeen[n]=1;hq[ht++]=n;}};
+    if(x>0)add(idx-1);if(x<w-1)add(idx+1);if(y>0)add(idx-w);if(y<h-1)add(idx+w);
+  }
+  const minHole=Math.max(80,Math.round(w*h*(0.00012+0.0009*holeStrength)));
+  const comps=new Int32Array(w*h); let compN=0;
+  for(let i=0;i<w*h;i++){
+    if(!lowHole[i]||hSeen[i]===1)continue;
+    compN++; let ch=0,ct=0,count=0,sumCd=0;
+    comps[ct++]=i; hSeen[i]=1;
+    while(ch<ct){
+      const idx=comps[ch++];count++; const p=idx*4;sumCd+=dist3(pix[p],pix[p+1],pix[p+2],bg);
+      const y=(idx/w)|0,x=idx-y*w; const add=n=>{if(lowHole[n]&&!hSeen[n]){hSeen[n]=1;comps[ct++]=n;}};
+      if(x>0)add(idx-1);if(x<w-1)add(idx+1);if(y>0)add(idx-w);if(y<h-1)add(idx+w);
+    }
+    const avgCd=sumCd/Math.max(1,count);
+    if(count>=minHole && (avgCd<150 || holeStrength>0.82)) for(let j=0;j<ct;j++) alpha[comps[j]]=0;
+  }
+  return {alpha,w,h,bg};
 }
-function blurAlpha(alpha,w,h,r){
-  if(r<=0)return alpha;
-  const radius=Math.max(1,Math.ceil(r));
-  const tmp=new Uint8ClampedArray(alpha.length),out=new Uint8ClampedArray(alpha.length);
-  for(let y=0;y<h;y++){
-    for(let x=0;x<w;x++){
-      let s=0,c=0;
-      for(let dx=-radius;dx<=radius;dx++){const xx=x+dx;if(xx>=0&&xx<w){s+=alpha[y*w+xx];c++}}
-      tmp[y*w+x]=Math.round(s/c);
-    }
-  }
-  for(let y=0;y<h;y++){
-    for(let x=0;x<w;x++){
-      let s=0,c=0;
-      for(let dy=-radius;dy<=radius;dy++){const yy=y+dy;if(yy>=0&&yy<h){s+=tmp[yy*w+x];c++}}
-      out[y*w+x]=Math.round(s/c);
-    }
-  }
-  return out;
+function compositeCut(original,alpha,w,h,b){
+  const bw=b.maxX-b.minX+1,bh=b.maxY-b.minY+1;
+  const cut=document.createElement('canvas'); cut.width=bw; cut.height=bh;
+  const ctx=cut.getContext('2d',{willReadFrequently:true});
+  ctx.drawImage(original,b.minX,b.minY,bw,bh,0,0,bw,bh);
+  const img=ctx.getImageData(0,0,bw,bh),d=img.data;
+  for(let y=0;y<bh;y++) for(let x=0;x<bw;x++) d[(y*bw+x)*4+3]=alpha[(b.minY+y)*w+(b.minX+x)];
+  ctx.putImageData(img,0,0);
+  return cut;
 }
 function findBounds(alpha,w,h){let minX=w,minY=h,maxX=-1,maxY=-1;for(let y=0;y<h;y++)for(let x=0;x<w;x++){if(alpha[y*w+x]>8){if(x<minX)minX=x;if(x>maxX)maxX=x;if(y<minY)minY=y;if(y>maxY)maxY=y}}return {minX,minY,maxX,maxY,ok:maxX>=0}}
-function buildCut(original,alpha,w,h,b){const bw=b.maxX-b.minX+1,bh=b.maxY-b.minY+1,cut=document.createElement('canvas');cut.width=bw;cut.height=bh;const ctx=cut.getContext('2d',{willReadFrequently:true});ctx.drawImage(original,b.minX,b.minY,bw,bh,0,0,bw,bh);const img=ctx.getImageData(0,0,bw,bh),d=img.data;const edge=Number($('feather').value)/10;for(let y=0;y<bh;y++)for(let x=0;x<bw;x++){let a=alpha[(b.minY+y)*w+(b.minX+x)];if(a<255&&a>0&&edge>0){a=Math.round(a*(1-0.08*edge)+255*(0.08*edge))}d[(y*bw+x)*4+3]=Math.max(0,Math.min(255,a))}ctx.putImageData(img,0,0);return cut}
 function fitZoom(){const availW=Math.max(260,editor.clientWidth-36),availH=Math.max(220,editor.clientHeight-36);zoom=Math.min(availW/640,availH/480);zoom=Math.max(.5,Math.min(4,zoom));applyZoom()}
 function applyZoom(){zoom=Math.max(.5,Math.min(4,zoom));out.style.width=(640*zoom)+'px';out.style.height=(480*zoom)+'px';editorInner.style.width=(640*zoom+36)+'px';editorInner.style.height=(480*zoom+36)+'px';$('zoomLabel').textContent=Math.round(zoom*100)+'%';}
-$('zoomIn').onclick=()=>{zoom=Math.min(4,zoom*1.25);applyZoom()};$('zoomOut').onclick=()=>{zoom=Math.max(.5,zoom/1.25);applyZoom()};$('zoomReset').onclick=()=>{zoom=1;applyZoom()};$('zoomFit').onclick=fitZoom;window.addEventListener('resize',()=>{if(zoom<1)fitZoom()});
+function renderResult(){
+  if(!state)return;
+  const {original,alpha,b}=state;
+  const cut=compositeCut(original,alpha,original.width,original.height,b);
+  const o=out.getContext('2d');o.clearRect(0,0,640,480);o.fillStyle='#fff';o.fillRect(0,0,640,480);
+  const bw=b.maxX-b.minX+1,bh=b.maxY-b.minY+1;
+  const scale=Math.min(600/bw,440/bh),dw=Math.max(1,Math.round(bw*scale)),dh=Math.max(1,Math.round(bh*scale)),dx=Math.round((640-dw)/2),dy=Math.round((480-dh)/2);
+  o.imageSmoothingEnabled=true;o.imageSmoothingQuality='high';
+  if(showMask){
+    const m=document.createElement('canvas');m.width=bw;m.height=bh;const mc=m.getContext('2d');const mi=mc.createImageData(bw,bh);for(let y=0;y<bh;y++)for(let x=0;x<bw;x++){const a=alpha[(b.minY+y)*original.width+(b.minX+x)],j=(y*bw+x)*4;mi.data[j]=a;mi.data[j+1]=a;mi.data[j+2]=a;mi.data[j+3]=255;}mc.putImageData(mi,0,0);o.drawImage(m,0,0,bw,bh,dx,dy,dw,dh);
+  }else{
+    o.drawImage(cut,0,0,bw,bh,dx,dy,dw,dh);
+  }
+  state.render={bw,bh,scale,dx,dy};
+}
+function pointerToCanvas(e){const r=out.getBoundingClientRect();return {x:(e.clientX-r.left)*640/r.width,y:(e.clientY-r.top)*480/r.height}}
+function paintMask(e){
+  if(!state)return;
+  const p=pointerToCanvas(e), rOut=Number($('brush').value);
+  const t=state.render; const sx=state.b.minX+(p.x-t.dx)/t.scale, sy=state.b.minY+(p.y-t.dy)/t.scale;
+  const sr=rOut/t.scale;
+  if(!Number.isFinite(sx)||!Number.isFinite(sy)||sx<0||sy<0||sx>=state.original.width||sy>=state.original.height)return;
+  if(p.x<t.dx||p.x>t.dx+t.render.bw*t.scale||p.y<t.dy||p.y>t.dy+t.render.bh*t.scale)return;
+  const x0=Math.max(0,Math.floor(sx-sr)),x1=Math.min(state.original.width-1,Math.ceil(sx+sr));
+  const y0=Math.max(0,Math.floor(sy-sr)),y1=Math.min(state.original.height-1,Math.ceil(sy+sr));
+  for(let y=y0;y<=y1;y++)for(let x=x0;x<=x1;x++){
+    const dx=x-sx,dy=y-sy;if(dx*dx+dy*dy>sr*sr)continue;
+    const idx=y*state.original.width+x;
+    state.alpha[idx]=workMode==='erase'?0:state.initialAlpha[idx];
+  }
+  renderResult();
+}
+$('zoomIn').onclick=()=>{zoom=Math.min(4,zoom*1.25);applyZoom()};$('zoomOut').onclick=()=>{zoom=Math.max(.5,zoom/1.25);applyZoom()};$('zoomReset').onclick=()=>{zoom=1;applyZoom()};$('zoomFit').onclick=fitZoom;window.addEventListener('resize',()=>{if(zoom<1)fitZoom();fitSourcePreview()});
 editor.addEventListener('wheel',e=>{if(e.ctrlKey)e.preventDefault();const rect=out.getBoundingClientRect(),mx=e.clientX-rect.left,my=e.clientY-rect.top;if(!rect.width)return;const old=zoom;zoom*=e.deltaY<0?1.12:.89;zoom=Math.max(.5,Math.min(4,zoom));applyZoom();const nx=mx*zoom/old,ny=my*zoom/old;editor.scrollLeft+=nx-mx;editor.scrollTop+=ny-my;e.preventDefault()},{passive:false});
 document.addEventListener('keydown',e=>{if(e.code==='Space'){spaceDown=true;e.preventDefault()}});document.addEventListener('keyup',e=>{if(e.code==='Space')spaceDown=false});
-function pointerToCanvas(e){const r=out.getBoundingClientRect();return {x:(e.clientX-r.left)*640/r.width,y:(e.clientY-r.top)*480/r.height}}
-function paint(e){const p=pointerToCanvas(e);const r=Number($('brush').value);if(p.x<0||p.y<0||p.x>640||p.y>480)return;const c=out.getContext('2d');c.save();c.beginPath();c.arc(p.x,p.y,r,0,Math.PI*2);c.clip();if(workMode==='erase'){c.fillStyle='#fff';c.fillRect(p.x-r,p.y-r,r*2,r*2)}else{c.drawImage(baseCanvas,p.x-r,p.y-r,r*2,r*2,p.x-r,p.y-r,r*2,r*2)}c.restore()}
-out.addEventListener('pointerdown',e=>{if(e.button===1||spaceDown){panning=true;lastPan={x:e.clientX,y:e.clientY};out.setPointerCapture(e.pointerId);return}drawing=true;out.setPointerCapture(e.pointerId);paint(e)});out.addEventListener('pointermove',e=>{if(panning){const dx=e.clientX-lastPan.x,dy=e.clientY-lastPan.y;editor.scrollLeft-=dx;editor.scrollTop-=dy;lastPan={x:e.clientX,y:e.clientY};return}if(drawing)paint(e)});out.addEventListener('pointerup',()=>{drawing=false;panning=false});out.addEventListener('pointercancel',()=>{drawing=false;panning=false});
-$('erase').onclick=()=>{workMode='erase';$('erase').classList.add('active');$('restore').classList.remove('active')};$('restore').onclick=()=>{workMode='restore';$('restore').classList.add('active');$('erase').classList.remove('active')};$('reset').onclick=()=>{if(baseCanvas){out.getContext('2d').clearRect(0,0,640,480);out.getContext('2d').drawImage(baseCanvas,0,0)}};
-$('thr').oninput=e=>$('thrVal').textContent=e.target.value+'%';$('edge').oninput=e=>$('edgeVal').textContent=e.target.value+' px';$('shadow').oninput=e=>$('shadowVal').textContent=e.target.value+'%';$('feather').oninput=e=>$('featherVal').textContent=(Number(e.target.value)/10).toFixed(1)+' px';
+out.addEventListener('pointerdown',e=>{if(e.button===1||spaceDown){panning=true;lastPan={x:e.clientX,y:e.clientY};out.setPointerCapture(e.pointerId);return}drawing=true;out.setPointerCapture(e.pointerId);paintMask(e)});
+out.addEventListener('pointermove',e=>{if(panning){const dx=e.clientX-lastPan.x,dy=e.clientY-lastPan.y;editor.scrollLeft-=dx;editor.scrollTop-=dy;lastPan={x:e.clientX,y:e.clientY};return}if(drawing)paintMask(e)});
+out.addEventListener('pointerup',()=>{drawing=false;panning=false});out.addEventListener('pointercancel',()=>{drawing=false;panning=false});
+$('erase').onclick=()=>{workMode='erase';$('erase').classList.add('active');$('restore').classList.remove('active')};$('restore').onclick=()=>{workMode='restore';$('restore').classList.add('active');$('erase').classList.remove('active')};
+$('reset').onclick=()=>{if(state){state.alpha=state.initialAlpha.slice();renderResult();}};
+$('thr').oninput=e=>$('thrVal').textContent=e.target.value+'%';$('edge').oninput=e=>$('edgeVal').textContent=e.target.value+' px';$('shadow').oninput=e=>$('shadowVal').textContent=e.target.value+'%';$('hole').oninput=e=>$('holeVal').textContent=e.target.value+'%';$('feather').oninput=e=>$('featherVal').textContent=(Number(e.target.value)/10).toFixed(1)+' px';$('clarity').oninput=e=>$('clarityVal').textContent=e.target.value+'%';$('showMask').onclick=()=>{showMask=!showMask;showMaskBtn.classList.toggle('active',showMask);showMaskBtn.textContent=showMask?'Скрыть маску':'Показать маску';if(state)renderResult()};
 $('model').onchange=()=>{setStatus('Модель изменена. Нажми «Обработать» заново.');};
 
-async function process(){if(current<0||processBtn.disabled)return;processBtn.disabled=true;$('download').disabled=true;try{const file=files[current],im=await loadImage(file),original=canvasOfImage(im);src.width=original.width;src.height=original.height;src.getContext('2d').drawImage(original,0,0);const key=$('model').value;let raw=await getMask(file,key);setStatus('Уточняю контур и убираю серую тень…',72);let refined=makeAlpha(raw,original);refined.alpha=blurAlpha(refined.alpha,refined.w,refined.h,Number($('feather').value)/10);const b=findBounds(refined.alpha,refined.w,refined.h);if(!b.ok)throw new Error('Модель не нашла объект.');const pad=Math.max(2,Math.round(Math.min(original.width,original.height)*.004));b.minX=Math.max(0,b.minX-pad);b.minY=Math.max(0,b.minY-pad);b.maxX=Math.min(original.width-1,b.maxX+pad);b.maxY=Math.min(original.height-1,b.maxY+pad);const cut=buildCut(original,refined.alpha,refined.w,refined.h,b);const o=out.getContext('2d');o.clearRect(0,0,640,480);o.fillStyle='#fff';o.fillRect(0,0,640,480);const bw=b.maxX-b.minX+1,bh=b.maxY-b.minY+1,scale=Math.min(600/bw,440/bh),dw=Math.max(1,Math.round(bw*scale)),dh=Math.max(1,Math.round(bh*scale)),dx=Math.round((640-dw)/2),dy=Math.round((480-dh)/2);o.imageSmoothingEnabled=true;o.imageSmoothingQuality='high';o.drawImage(cut,0,0,bw,bh,dx,dy,dw,dh);baseCanvas=document.createElement('canvas');baseCanvas.width=640;baseCanvas.height=480;baseCanvas.getContext('2d').drawImage(out,0,0);setStatus(`Готово • ${key==='birefnet512'?'BiRefNet Lite 512':'ORMBG'} • порог ${$('thr').value}%`,100,'ok');$('download').disabled=false;applyZoom()}catch(e){
-  console.error('PROCESS_ERROR',e);
-  const msg=e?.message||String(e);
-  setStatus('Ошибка: '+msg,0,'err');
-}finally{processBtn.disabled=false}}
+async function process(){
+  if(current<0||processBtn.disabled)return;
+  processBtn.disabled=true; $('download').disabled=true; showMaskBtn.disabled=true; showMask=false; showMaskBtn.classList.remove('active'); showMaskBtn.textContent='Показать маску';
+  try{
+    const file=files[current],im=await loadImage(file),original=canvasOfImage(im);
+    src.width=original.width;src.height=original.height;src.getContext('2d').clearRect(0,0,src.width,src.height);src.getContext('2d').drawImage(original,0,0);fitSourcePreview();
+    setStatus('AI строит исходную маску…',12);
+    const key=$('model').value;
+    const raw=await getMask(file,key);
+    setStatus('Уточняю край, тени и внутренние отверстия…',72);
+    const refined=makeAlpha(raw,original);
+    const b=findBounds(refined.alpha,refined.w,refined.h);
+    if(!b.ok)throw new Error('Не удалось найти объект после очистки маски. Уменьши порог или очистку отверстий.');
+    const pad=Math.max(3,Math.round(Math.min(original.width,original.height)*.004));
+    b.minX=Math.max(0,b.minX-pad);b.minY=Math.max(0,b.minY-pad);b.maxX=Math.min(original.width-1,b.maxX+pad);b.maxY=Math.min(original.height-1,b.maxY+pad);
+    state={original,alpha:refined.alpha,initialAlpha:refined.alpha.slice(),b,render:null};
+    renderResult();
+    applyZoom();
+    showMaskBtn.disabled=false; $('download').disabled=false;
+    setStatus(`Готово • ${key==='birefnet512'?'BiRefNet Lite 512':'ORMBG'} • край ${$('clarity').value}% • отверстия ${$('hole').value}%`,100,'ok');
+  }catch(e){
+    console.error('PROCESS_ERROR',e);
+    const msg=e?.message||String(e);
+    setStatus('Ошибка: '+msg,0,'err');
+  }finally{processBtn.disabled=false}
+}
 processBtn.onclick=process;
 $('download').onclick=()=>{const png=$('format').value==='png';const type=png?'image/png':'image/jpeg';out.toBlob(b=>{const u=URL.createObjectURL(b),a=document.createElement('a');a.href=u;a.download='detail-640x480.'+(png?'png':'jpg');a.click();setTimeout(()=>URL.revokeObjectURL(u),1000)},type,png?undefined:1)};
 applyZoom();
