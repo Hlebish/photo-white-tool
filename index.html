@@ -3,336 +3,125 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<title>Фото деталей — чистый белый фон 640×480</title>
+<title>Фото деталей — белый фон 640×480</title>
 <style>
 :root{--bg:#eef2f6;--card:#fff;--ink:#17202a;--muted:#667382;--blue:#1769ff;--line:#d9e0e7;--soft:#f7f9fb;--red:#c62828;--green:#197a42}
-*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--ink);font:15px system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif}
-.wrap{width:min(1200px,calc(100% - 24px));margin:18px auto}.card{background:#fff;border:1px solid var(--line);border-radius:18px;padding:22px;box-shadow:0 10px 35px #0000000b}
-h1{margin:0 0 5px;font-size:25px}.sub{color:var(--muted);margin-bottom:18px}
-.drop{min-height:145px;border:2px dashed #b7c3cf;border-radius:16px;background:#fafcfe;display:flex;align-items:center;justify-content:center;text-align:center;cursor:pointer;padding:20px}.drop:hover,.drop.drag{border-color:var(--blue);background:#f2f7ff}.drop strong{font-size:18px}.drop span{display:block;color:var(--muted);margin-top:6px}
-input[type=file]{display:none}.controls{display:flex;gap:9px;align-items:center;flex-wrap:wrap;margin-top:14px}
-button,select{font:inherit;padding:10px 13px;border:1px solid var(--line);border-radius:10px;background:#fff;cursor:pointer}button.primary{background:var(--blue);border-color:var(--blue);color:#fff;font-weight:700}button:disabled{opacity:.45;cursor:not-allowed}
-.check{display:flex;align-items:center;gap:7px}.status{margin-top:12px;color:var(--muted);min-height:22px}.status.err{color:var(--red);font-weight:600}.status.ok{color:var(--green);font-weight:600}
-.progress{height:7px;background:#e8edf2;border-radius:99px;overflow:hidden}.bar{height:100%;width:0;background:var(--blue);transition:width .2s}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--ink);font:15px system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif}.wrap{width:min(1240px,calc(100% - 24px));margin:18px auto}.card{background:#fff;border:1px solid var(--line);border-radius:18px;padding:22px;box-shadow:0 10px 35px #0000000b}h1{margin:0 0 5px;font-size:25px}.sub{color:var(--muted);margin-bottom:18px}.drop{min-height:125px;border:2px dashed #b7c3cf;border-radius:16px;background:#fafcfe;display:flex;align-items:center;justify-content:center;text-align:center;cursor:pointer;padding:20px}.drop:hover,.drop.drag{border-color:var(--blue);background:#f2f7ff}.drop strong{font-size:18px}.drop span{display:block;color:var(--muted);margin-top:6px}input[type=file]{display:none}
+.controls{display:flex;gap:9px;align-items:center;flex-wrap:wrap;margin-top:14px}button,select{font:inherit;padding:10px 13px;border:1px solid var(--line);border-radius:10px;background:#fff;cursor:pointer}button.primary{background:var(--blue);border-color:var(--blue);color:#fff;font-weight:700}button.active{border-color:var(--blue);color:var(--blue);background:#f1f6ff}button:disabled{opacity:.45;cursor:not-allowed}
+.status{margin-top:12px;color:var(--muted);min-height:22px}.status.err{color:var(--red);font-weight:600}.status.ok{color:var(--green);font-weight:600}.progress{height:7px;background:#e8edf2;border-radius:99px;overflow:hidden}.bar{height:100%;width:0;background:var(--blue);transition:width .2s}
 .grid{display:grid;grid-template-columns:1fr 1fr;gap:15px;margin-top:18px}.pane{border:1px solid var(--line);border-radius:14px;overflow:hidden}.pane h2{font-size:14px;margin:0;padding:10px 12px;border-bottom:1px solid var(--line)}
-.preview{min-height:320px;padding:12px;display:flex;align-items:center;justify-content:center;background:repeating-conic-gradient(#f0f2f4 0 25%,#fff 0 50%) 50%/22px 22px}.preview canvas{max-width:100%;max-height:500px;display:block}
+.preview{min-height:330px;padding:12px;display:flex;align-items:center;justify-content:center;background:repeating-conic-gradient(#f0f2f4 0 25%,#fff 0 50%) 50%/22px 22px;overflow:auto}.preview canvas{display:block;max-width:none;max-height:none}
+.editor-head{display:flex;gap:7px;align-items:center;flex-wrap:wrap;border-bottom:1px solid var(--line);padding:8px 10px;background:#fbfcfd}.editor-head button{padding:7px 10px}.zoom-label{font-size:13px;color:var(--muted);min-width:48px;text-align:center}.editor{height:480px;overflow:auto;touch-action:none;cursor:crosshair;background:#f2f4f7;display:flex;align-items:flex-start;justify-content:flex-start}.editor-inner{padding:18px;min-width:max-content;min-height:max-content}.editor canvas{width:640px;height:480px;display:block;box-shadow:0 2px 12px #0001;transform-origin:top left}
 .tools{border-top:1px solid var(--line);padding:10px 12px;display:flex;gap:8px;align-items:center;flex-wrap:wrap}.tools label{font-size:13px;color:var(--muted)}
 .tuning{margin-top:15px;padding:12px;background:var(--soft);border:1px solid var(--line);border-radius:12px}.tuning-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}.tuning label{display:block;font-size:13px;color:var(--muted)}.tuning input[type=range]{width:100%}.value{font-weight:700;color:var(--ink)}
 .queue{margin-top:16px;display:grid;grid-template-columns:repeat(auto-fill,minmax(170px,1fr));gap:9px}.item{border:1px solid var(--line);border-radius:11px;padding:7px;cursor:pointer;background:#fff}.item.active{border:2px solid var(--blue)}.thumb{height:105px;display:flex;align-items:center;justify-content:center;background:#f5f7f9;border-radius:7px;overflow:hidden}.thumb img{max-width:100%;max-height:100%;object-fit:contain}.item small{display:block;margin-top:5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .note{margin-top:14px;background:#f5f8ff;border:1px solid #dce7ff;border-radius:11px;padding:11px 13px;color:#536a82;font-size:13px;line-height:1.5}.note b{color:#33475b}
-@media(max-width:800px){.wrap{width:calc(100% - 10px);margin:6px auto}.card{padding:13px}.grid{grid-template-columns:1fr}.preview{min-height:240px}.tuning-grid{grid-template-columns:1fr}h1{font-size:21px}}
+@media(max-width:800px){.wrap{width:calc(100% - 10px);margin:6px auto}.card{padding:13px}.grid{grid-template-columns:1fr}.preview{min-height:250px}.tuning-grid{grid-template-columns:1fr}h1{font-size:21px}.editor{height:390px}}
 </style>
 </head>
 <body>
 <div class="wrap"><main class="card">
 <h1>Фото деталей → чистый белый фон → 640×480</h1>
-<div class="sub">V16 • стабильный WASM-процессинг • AI строит только маску • оригинальные пиксели детали не перерисовываются</div>
+<div class="sub">V17 • модели без проблемного custom/q8-режима • оригинальные пиксели детали сохраняются • редактор с приближением</div>
 
-<label id="drop" class="drop">
-  <div><strong>📷 Нажми или перетащи фотографии сюда</strong><span>Можно выбрать сразу несколько JPG / PNG / WebP</span></div>
-  <input id="files" type="file" accept="image/jpeg,image/png,image/webp" multiple>
-</label>
+<label id="drop" class="drop"><div><strong>📷 Нажми или перетащи фотографии сюда</strong><span>Можно выбрать сразу несколько JPG / PNG / WebP</span></div><input id="files" type="file" accept="image/jpeg,image/png,image/webp" multiple></label>
 
 <div class="controls">
-  <button id="process" class="primary" disabled>Обработать</button>
-  <label>Модель:
-    <select id="model">
-      <option value="rmbg14">RMBG-1.4 • q8 • основной</option>
-      <option value="isnet">ISNet General • q8 • эксперимент</option>
-      <option value="birefnet">BiRefNet Lite • fp32 • эксперимент</option>
-    </select>
-  </label>
-  <label>Вывод:
-    <select id="format"><option value="png">PNG — без потерь</option><option value="jpg">JPG 100%</option></select>
-  </label>
-  <button id="download" disabled>Скачать</button>
+<button id="process" class="primary" disabled>Обработать</button>
+<label>Модель:
+<select id="model">
+<option value="birefnet">BiRefNet Lite • качество краёв (FP32)</option>
+<option value="ormbg">ORMBG • быстрый Q8</option>
+<option value="auto">Авто • BiRefNet → ORMBG при ошибке</option>
+</select></label>
+<label>Вывод:<select id="format"><option value="png">PNG — без потерь</option><option value="jpg">JPG 100%</option></select></label>
+<button id="download" disabled>Скачать</button>
 </div>
 
 <div class="tuning">
-  <div class="tuning-grid">
-    <label>Отсечение слабого фона: <span id="thrVal" class="value">42%</span>
-      <input id="thr" type="range" min="28" max="60" value="42">
-    </label>
-    <label>Лёгкая резкость после 640×480: <span id="sharpVal" class="value">0.00</span>
-      <input id="sharp" type="range" min="0" max="20" value="0">
-    </label>
-  </div>
-  <div style="margin-top:8px;color:var(--muted);font-size:13px">Вместо жёсткого обрезания используем связную маску: слабый фон отбрасывается, а тонкая граница детали сохраняется. По умолчанию резкость выключена.</div>
+<div class="tuning-grid">
+<label>Порог фона: <span id="thrVal" class="value">28%</span><input id="thr" type="range" min="16" max="50" value="28"></label>
+<label>Защита тонких краёв: <span id="edgeVal" class="value">5 px</span><input id="edge" type="range" min="1" max="12" value="5"></label>
+<label>Очистка серого фона: <span id="shadowVal" class="value">70%</span><input id="shadow" type="range" min="0" max="100" value="70"></label>
+<label>Мягкость контура: <span id="featherVal" class="value">0.6 px</span><input id="feather" type="range" min="0" max="20" value="6"></label>
+</div>
+<div style="margin-top:8px;color:var(--muted);font-size:13px">Для первого теста: <b>BiRefNet Lite</b>, порог 28%, защита краёв 5 px, очистка серого фона 70%, мягкость 0.6 px.</div>
 </div>
 
-<div id="status" class="status">Выбери фотографию.</div>
-<div class="progress"><div id="bar" class="bar"></div></div>
+<div id="status" class="status">Выбери фотографию.</div><div class="progress"><div id="bar" class="bar"></div></div>
 
 <div class="grid">
-  <div class="pane"><h2>Исходник</h2><div class="preview"><canvas id="src"></canvas></div></div>
-  <div class="pane"><h2>Результат 640×480</h2><div class="preview"><canvas id="out" width="640" height="480"></canvas></div>
-    <div class="tools">
-      <button id="erase">Ластик</button>
-      <button id="reset">Сбросить правки</button>
-      <label>Кисть <input id="brush" type="range" min="5" max="90" value="30"></label>
-    </div>
-  </div>
+<div class="pane"><h2>Исходник</h2><div class="preview"><canvas id="src"></canvas></div></div>
+<div class="pane">
+<h2>Результат 640×480</h2>
+<div class="editor-head">
+<button id="zoomOut">−</button><button id="zoomReset">100%</button><button id="zoomIn">+</button><button id="zoomFit">Вписать</button><span id="zoomLabel" class="zoom-label">100%</span>
+</div>
+<div id="editor" class="editor"><div id="editorInner" class="editor-inner"><canvas id="out" width="640" height="480"></canvas></div></div>
+<div class="tools">
+<button id="erase" class="active">Ластик</button><button id="restore">Восстановить</button><button id="reset">Сбросить всё</button><label>Кисть <input id="brush" type="range" min="3" max="90" value="25"></label>
+</div>
+</div>
 </div>
 
 <div id="queue" class="queue"></div>
-<div class="note"><b>Как сделано:</b> модель строит только маску. Оригинальная фотография детали берётся напрямую из исходника. Никаких AI-изменений текстуры, граней или цвета самой детали нет. Маска после AI очищается от слабых теней, затем выполняется один финальный resize до 640×480. Для первого теста оставь <b>RMBG-1.4</b>, отсечение <b>42%</b> и резкость <b>0</b>.</div>
+<div class="note"><b>Почему V17:</b> проблемные варианты RMBG q8 и ISNet custom убраны из главного пути. Для высокой детализации используется официальный ONNX-пакет BiRefNet Lite; в его документации прямо показана загрузка через <code>AutoModel + AutoProcessor + RawImage</code>, вход 1024×1024 и получение alpha matte из <code>output_image</code>. Для лёгкого режима используется ORMBG, для которого опубликован q8-вес около 44 МБ и пример запуска через Transformers.js.</div>
 </main></div>
 
 <script type="module">
-import { pipeline, env, RawImage } from 'https://cdn.jsdelivr.net/npm/@huggingface/transformers@3.8.1';
-
-env.allowLocalModels = false;
-env.allowRemoteModels = true;
-env.useBrowserCache = true;
-
-const $ = id => document.getElementById(id);
-const filesEl=$('files'), drop=$('drop'), processBtn=$('process'), statusEl=$('status'), bar=$('bar');
-const src=$('src'), out=$('out'), queue=$('queue');
-let files=[], current=-1, baseCanvas=null, workMode='erase';
-const pipes=new Map();
-let currentRuntimePromise=null;
-
-function setStatus(text,p=null,kind=''){
-  statusEl.textContent=text;
-  statusEl.className='status'+(kind?' '+kind:'');
-  if(p!==null) bar.style.width=Math.max(0,Math.min(100,p))+'%';
-}
+import { pipeline, env, RawImage, AutoModel, AutoProcessor } from 'https://cdn.jsdelivr.net/npm/@huggingface/transformers@3.8.1';
+env.allowLocalModels=false;env.allowRemoteModels=true;env.useBrowserCache=true;
+const $=id=>document.getElementById(id);
+const filesEl=$('files'),drop=$('drop'),processBtn=$('process'),statusEl=$('status'),bar=$('bar'),src=$('src'),out=$('out'),queue=$('queue'),editor=$('editor'),editorInner=$('editorInner');
+let files=[],current=-1,baseCanvas=null,workMode='erase',zoom=1,spaceDown=false,drawing=false,panning=false,lastPan={x:0,y:0};
+let birefPromise=null,ormbPromise=null;
+const cache=new Map();
+function setStatus(text,p=null,kind=''){statusEl.textContent=text;statusEl.className='status'+(kind?' '+kind:'');if(p!==null)bar.style.width=Math.max(0,Math.min(100,p))+'%';}
 function esc(s){return s.replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[c]))}
-function loadImage(blob){return new Promise((res,rej)=>{const im=new Image();im.onload=()=>{URL.revokeObjectURL(im.src);res(im)};im.onerror=rej;im.src=URL.createObjectURL(blob)})}
+function loadImage(blob){return new Promise((res,rej)=>{const im=new Image();const u=URL.createObjectURL(blob);im.onload=()=>{URL.revokeObjectURL(u);res(im)};im.onerror=rej;im.src=u})}
 function canvasOfImage(im){const c=document.createElement('canvas');c.width=im.naturalWidth||im.width;c.height=im.naturalHeight||im.height;c.getContext('2d').drawImage(im,0,0);return c}
-async function getRuntime(){
-  return {device:'wasm',name:'WASM'};
-}
+async function showSource(file){const im=await loadImage(file);src.width=im.naturalWidth||im.width;src.height=im.naturalHeight||im.height;src.getContext('2d').drawImage(im,0,0)}
+function setFiles(list){files=[...list];current=files.length?0:-1;queue.innerHTML='';if(files.length)showSource(files[0]).catch(()=>{});files.forEach((f,i)=>{const el=document.createElement('div');el.className='item'+(i===0?' active':'');el.innerHTML=`<div class="thumb"><img></div><small>${esc(f.name)}</small>`;const im=el.querySelector('img');im.src=URL.createObjectURL(f);im.onload=()=>URL.revokeObjectURL(im.src);el.onclick=()=>{current=i;document.querySelectorAll('.item').forEach(x=>x.classList.remove('active'));el.classList.add('active');processBtn.disabled=false;showSource(f).catch(()=>{});setStatus('Выбрано: '+f.name)};queue.appendChild(el)});processBtn.disabled=!files.length;if(files.length)setStatus(`Выбрано: ${files[0].name}.`)}
+drop.onclick=()=>filesEl.click();drop.ondragover=e=>{e.preventDefault();drop.classList.add('drag')};drop.ondragleave=()=>drop.classList.remove('drag');drop.ondrop=e=>{e.preventDefault();drop.classList.remove('drag');setFiles(e.dataTransfer.files)};filesEl.onchange=e=>setFiles(e.target.files);
 
-const MODEL_CONFIG={
-  rmbg14:{id:'briaai/RMBG-1.4', label:'RMBG-1.4', webgpuDtype:'fp16', wasmDtype:'q8'},
-  isnet:{id:'Ko033/isnet-general-use-onnx', label:'ISNet General', webgpuDtype:'fp16', wasmDtype:'q8'},
-  birefnet:{id:'onnx-community/BiRefNet_lite-ONNX', label:'BiRefNet Lite', webgpuDtype:'fp16', wasmDtype:'fp32'}
-};
+async function getBiRefNet(){if(birefPromise)return birefPromise;setStatus('Загружаю BiRefNet Lite…',8);birefPromise=(async()=>{const model=await AutoModel.from_pretrained('onnx-community/BiRefNet_lite-ONNX',{dtype:'fp32',device:'wasm'});const processor=await AutoProcessor.from_pretrained('onnx-community/BiRefNet_lite-ONNX');return {model,processor}})();try{return await birefPromise}catch(e){birefPromise=null;throw e}}
+async function getORMBG(){if(ormbPromise)return ormbPromise;setStatus('Загружаю ORMBG Q8…',8);ormbPromise=pipeline('background-removal','onnx-community/ormbg-ONNX',{device:'wasm',dtype:'q8',progress_callback:i=>{const p=Number(i?.progress)||0;if(p>0)setStatus(`Загрузка ORMBG… ${Math.round(p)}%`,Math.min(55,10+p*.45))}});try{return await ormbPromise}catch(e){ormbPromise=null;throw e}}
 
-async function getPipe(key){
-  if(pipes.has(key)) return pipes.get(key);
-  const cfg=MODEL_CONFIG[key];
-  const rt=await getRuntime();
-  const dtype=cfg.wasmDtype;
-  setStatus(`Загружаю ${cfg.label} (${rt.name}, ${dtype})…`,8);
-  const promise=pipeline('image-segmentation',cfg.id,{device:rt.device,dtype,progress_callback:info=>{
-    const pct=Number(info?.progress)||0;
-    if(Number.isFinite(pct) && pct>0) setStatus(`Загрузка ${cfg.label}… ${Math.round(pct)}%`,Math.min(55,10+pct*.45));
-  }});
-  pipes.set(key,promise);
-  try{return await promise;}catch(e){pipes.delete(key);throw e;}
-}
+function rawImageToGray(raw){const w=raw.width,h=raw.height,ch=raw.channels||1,data=raw.data;const gray=new Uint8ClampedArray(w*h);for(let i=0,j=0;i<gray.length;i++){let v=data[j++];if(ch===2){v=data[j++]}else if(ch>=3){const g=data[j++],b=data[j++];v=Math.round((v+g+b)/3);if(ch===4)j++}gray[i]=v}let min=255,max=0;for(const v of gray){if(v<min)min=v;if(v>max)max=v}if(max-min>12 && (min>2||max<253)){for(let i=0;i<gray.length;i++)gray[i]=Math.round((gray[i]-min)*255/(max-min))}return {gray,w,h}}
+async function biRefMask(file){const {model,processor}=await getBiRefNet();setStatus('BiRefNet: строю маску 1024×1024…',60);const image=await RawImage.fromBlob(file);const inputs=await processor(image);const output=await model({input_image:inputs.pixel_values});const outTensor=output?.output_image ?? output?.[0] ?? output;const t=Array.isArray(outTensor)?outTensor[0]:outTensor;const matte=t.sigmoid().mul(255).to('uint8');let mask=RawImage.fromTensor(matte,'CHW');mask=await mask.resize(image.width,image.height,{resample:2});return rawImageToGray(mask)}
+async function ormbgMask(file){const seg=await getORMBG();setStatus('ORMBG: строю маску…',60);const u=URL.createObjectURL(file);try{const r=await seg([u]);const mask=r?.[0];if(!mask)throw new Error('ORMBG не вернул маску.');return rawImageToGray(mask)}finally{URL.revokeObjectURL(u)}}
+async function getMask(file,key){if(key==='birefnet')return biRefMask(file);if(key==='ormbg')return ormbgMask(file);try{return await biRefMask(file)}catch(e){console.warn('BiRefNet failed, fallback ORMBG',e);setStatus('BiRefNet не запустился — пробую ORMBG Q8…',42);return await ormbgMask(file)}}
 
-async function showSourcePreview(file){
-  try{const im=await loadImage(file);src.width=im.naturalWidth||im.width;src.height=im.naturalHeight||im.height;src.getContext('2d').drawImage(im,0,0)}catch(e){console.error(e)}
-}
+function sampleBackground(original){const ctx=original.getContext('2d',{willReadFrequently:true});const w=original.width,h=original.height;const pts=[];const step=Math.max(1,Math.floor(Math.min(w,h)/80));for(let x=0;x<w;x+=step){pts.push([x,0],[x,h-1])}for(let y=0;y<h;y+=step){pts.push([0,y],[w-1,y])}const vals=[];for(const [x,y] of pts){const d=ctx.getImageData(x,y,1,1).data;vals.push([d[0],d[1],d[2]])}vals.sort((a,b)=>(a[0]+a[1]+a[2])-(b[0]+b[1]+b[2]));const mid=vals[Math.floor(vals.length/2)]||[200,200,200];return mid}
+function dist3(r,g,b,bg){const dr=r-bg[0],dg=g-bg[1],db=b-bg[2];return Math.sqrt(dr*dr+dg*dg+db*db)}
+function makeAlpha(raw,original){const {gray,w,h}=raw;const low=Number($('thr').value)*2.55;const high=Math.min(245,low+72);const band=Number($('edge').value);const keep=new Uint8Array(w*h);const core=new Uint8Array(w*h);for(let i=0;i<gray.length;i++){if(gray[i]>=low)keep[i]=1;if(gray[i]>=high)core[i]=1}
+// Find largest connected core components. Small stray objects get removed; edge pixels only survive near a strong core.
+const seen=new Uint8Array(w*h),labels=new Int32Array(w*h),sizes=[];let label=0;const q=new Int32Array(w*h);
+for(let i=0;i<w*h;i++){if(!core[i]||seen[i])continue;label++;let head=0,tail=0,count=0;q[tail++]=i;seen[i]=1;while(head<tail){const idx=q[head++];labels[idx]=label;count++;const y=(idx/w)|0,x=idx-y*w;const ns=[];if(x>0)ns.push(idx-1);if(x<w-1)ns.push(idx+1);if(y>0)ns.push(idx-w);if(y<h-1)ns.push(idx+w);for(const n of ns)if(core[n]&&!seen[n]){seen[n]=1;q[tail++]=n}}sizes[label]=count}
+let mainLabel=0,maxSize=0;for(let i=1;i<sizes.length;i++)if(sizes[i]>maxSize){maxSize=sizes[i];mainLabel=i}
+const dist=new Uint16Array(w*h);dist.fill(65535);const keep2=new Uint8Array(w*h);let head=0,tail=0;for(let i=0;i<w*h;i++)if(labels[i]===mainLabel){keep2[i]=1;dist[i]=0;q[tail++]=i}while(head<tail){const idx=q[head++],d=dist[idx];if(d>=band)continue;const y=(idx/w)|0,x=idx-y*w;const ns=[];if(x>0)ns.push(idx-1);if(x<w-1)ns.push(idx+1);if(y>0)ns.push(idx-w);if(y<h-1)ns.push(idx+w);for(const n of ns)if(keep[n]&&!keep2[n]){keep2[n]=1;dist[n]=d+1;q[tail++]=n}}
+const out=new Uint8ClampedArray(w*h);const ctx=original.getContext('2d',{willReadFrequently:true});const pix=ctx.getImageData(0,0,w,h).data;const bg=sampleBackground(original);const shadowStrength=Number($('shadow').value)/100;
+for(let i=0,p=0;i<out.length;i++,p+=4){if(!keep2[i]){out[i]=0;continue}const v=gray[i];let a=v<=low?0:v>=high?255:Math.round((v-low)*255/(high-low));if(a<255 && shadowStrength>0){const close=dist3(pix[p],pix[p+1],pix[p+2],bg);const similarity=Math.max(0,1-close/95);const factor=1-shadowStrength*similarity*0.9;a=Math.round(a*factor)}out[i]=Math.max(0,Math.min(255,a))}
+return {alpha:out,w,h,bg}}
+function blurAlpha(alpha,w,h,r){if(r<=0)return alpha;const tmp=new Uint8ClampedArray(alpha),out=new Uint8ClampedArray(alpha),ri=Math.max(1,Math.ceil(r));for(let y=0;y<h;y++)for(let x=0;x<w;x++){let sum=0,c=0;for(let yy=Math.max(0,y-ri);yy<=Math.min(h-1,y+ri);yy++)for(let xx=Math.max(0,x-ri);xx<=Math.min(w-1,x+ri);xx++){sum+=tmp[yy*w+xx];c++}out[y*w+x]=sum/c}return out}
+function findBounds(alpha,w,h){let minX=w,minY=h,maxX=-1,maxY=-1;for(let y=0;y<h;y++)for(let x=0;x<w;x++){if(alpha[y*w+x]>8){if(x<minX)minX=x;if(x>maxX)maxX=x;if(y<minY)minY=y;if(y>maxY)maxY=y}}return {minX,minY,maxX,maxY,ok:maxX>=0}}
+function buildCut(original,alpha,w,h,b){const bw=b.maxX-b.minX+1,bh=b.maxY-b.minY+1,cut=document.createElement('canvas');cut.width=bw;cut.height=bh;const ctx=cut.getContext('2d',{willReadFrequently:true});ctx.drawImage(original,b.minX,b.minY,bw,bh,0,0,bw,bh);const img=ctx.getImageData(0,0,bw,bh),d=img.data;const edge=Number($('feather').value)/10;for(let y=0;y<bh;y++)for(let x=0;x<bw;x++){let a=alpha[(b.minY+y)*w+(b.minX+x)];if(a<255&&a>0&&edge>0){a=Math.round(a*(1-0.08*edge)+255*(0.08*edge))}d[(y*bw+x)*4+3]=Math.max(0,Math.min(255,a))}ctx.putImageData(img,0,0);return cut}
+function fitZoom(){const availW=Math.max(260,editor.clientWidth-36),availH=Math.max(220,editor.clientHeight-36);zoom=Math.min(availW/640,availH/480);zoom=Math.max(.5,Math.min(4,zoom));applyZoom()}
+function applyZoom(){zoom=Math.max(.5,Math.min(4,zoom));out.style.width=(640*zoom)+'px';out.style.height=(480*zoom)+'px';editorInner.style.width=(640*zoom+36)+'px';editorInner.style.height=(480*zoom+36)+'px';$('zoomLabel').textContent=Math.round(zoom*100)+'%';}
+$('zoomIn').onclick=()=>{zoom=Math.min(4,zoom*1.25);applyZoom()};$('zoomOut').onclick=()=>{zoom=Math.max(.5,zoom/1.25);applyZoom()};$('zoomReset').onclick=()=>{zoom=1;applyZoom()};$('zoomFit').onclick=fitZoom;window.addEventListener('resize',()=>{if(zoom<1)fitZoom()});
+editor.addEventListener('wheel',e=>{if(e.ctrlKey)e.preventDefault();const rect=out.getBoundingClientRect(),mx=e.clientX-rect.left,my=e.clientY-rect.top;if(!rect.width)return;const old=zoom;zoom*=e.deltaY<0?1.12:.89;zoom=Math.max(.5,Math.min(4,zoom));applyZoom();const nx=mx*zoom/old,ny=my*zoom/old;editor.scrollLeft+=nx-mx;editor.scrollTop+=ny-my;e.preventDefault()},{passive:false});
+document.addEventListener('keydown',e=>{if(e.code==='Space'){spaceDown=true;e.preventDefault()}});document.addEventListener('keyup',e=>{if(e.code==='Space')spaceDown=false});
+function pointerToCanvas(e){const r=out.getBoundingClientRect();return {x:(e.clientX-r.left)*640/r.width,y:(e.clientY-r.top)*480/r.height}}
+function paint(e){const p=pointerToCanvas(e);const r=Number($('brush').value);if(p.x<0||p.y<0||p.x>640||p.y>480)return;const c=out.getContext('2d');c.save();c.beginPath();c.arc(p.x,p.y,r,0,Math.PI*2);c.clip();if(workMode==='erase'){c.fillStyle='#fff';c.fillRect(p.x-r,p.y-r,r*2,r*2)}else{c.drawImage(baseCanvas,p.x-r,p.y-r,r*2,r*2,p.x-r,p.y-r,r*2,r*2)}c.restore()}
+out.addEventListener('pointerdown',e=>{if(e.button===1||spaceDown){panning=true;lastPan={x:e.clientX,y:e.clientY};out.setPointerCapture(e.pointerId);return}drawing=true;out.setPointerCapture(e.pointerId);paint(e)});out.addEventListener('pointermove',e=>{if(panning){const dx=e.clientX-lastPan.x,dy=e.clientY-lastPan.y;editor.scrollLeft-=dx;editor.scrollTop-=dy;lastPan={x:e.clientX,y:e.clientY};return}if(drawing)paint(e)});out.addEventListener('pointerup',()=>{drawing=false;panning=false});out.addEventListener('pointercancel',()=>{drawing=false;panning=false});
+$('erase').onclick=()=>{workMode='erase';$('erase').classList.add('active');$('restore').classList.remove('active')};$('restore').onclick=()=>{workMode='restore';$('restore').classList.add('active');$('erase').classList.remove('active')};$('reset').onclick=()=>{if(baseCanvas){out.getContext('2d').clearRect(0,0,640,480);out.getContext('2d').drawImage(baseCanvas,0,0)}};
+$('thr').oninput=e=>$('thrVal').textContent=e.target.value+'%';$('edge').oninput=e=>$('edgeVal').textContent=e.target.value+' px';$('shadow').oninput=e=>$('shadowVal').textContent=e.target.value+'%';$('feather').oninput=e=>$('featherVal').textContent=(Number(e.target.value)/10).toFixed(1)+' px';
+$('model').onchange=()=>{setStatus('Модель изменена. Нажми «Обработать» заново.');};
 
-function setFiles(list){
-  files=[...list];current=files.length?0:-1;queue.innerHTML='';
-  if(files.length) showSourcePreview(files[0]);
-  files.forEach((f,i)=>{
-    const el=document.createElement('div');el.className='item'+(i===0?' active':'');
-    el.innerHTML=`<div class="thumb"><img></div><small>${esc(f.name)}</small>`;
-    const im=el.querySelector('img');im.src=URL.createObjectURL(f);im.onload=()=>URL.revokeObjectURL(im.src);
-    el.onclick=()=>{current=i;document.querySelectorAll('.item').forEach(x=>x.classList.remove('active'));el.classList.add('active');processBtn.disabled=false;showSourcePreview(f);setStatus('Выбрано: '+f.name)};
-    queue.appendChild(el);
-  });
-  processBtn.disabled=!files.length;
-  if(files.length)setStatus(`Выбрано: ${files[0].name}.`);
-}
-
-drop.onclick=()=>filesEl.click();
-drop.ondragover=e=>{e.preventDefault();drop.classList.add('drag')};
-drop.ondragleave=()=>drop.classList.remove('drag');
-drop.ondrop=e=>{e.preventDefault();drop.classList.remove('drag');setFiles(e.dataTransfer.files)};
-filesEl.onchange=e=>setFiles(e.target.files);
-
-function rawMaskToGray(rawMask){
-  const w=rawMask.width,h=rawMask.height;
-  const ch=rawMask.channels||1;
-  const src=rawMask.data;
-  const gray=new Uint8ClampedArray(w*h);
-  let min=255,max=0;
-  for(let i=0,j=0;i<gray.length;i++){
-    let v=src[j++];
-    if(ch>=3){ const g=src[j++], b=src[j++]; v=Math.round((v+g+b)/3); if(ch===4) j++; }
-    else if(ch===2){ j++; }
-    gray[i]=v; if(v<min)min=v; if(v>max)max=v;
-  }
-  // Некоторые модели отдают вероятность с очень узким диапазоном.
-  // Нормализуем только если диапазон действительно ненулевой.
-  if(max-min>=8 && (min>3 || max<252)) for(let i=0;i<gray.length;i++) gray[i]=Math.round((gray[i]-min)*255/(max-min));
-  return {gray,w,h};
-}
-
-function refineMaskHysteresis(rawMask,cutPct,edgeRadius=7){
-  const {gray,w,h}=rawMaskToGray(rawMask);
-  const cut=Math.round(cutPct*2.55);
-  const edgeT=Math.max(12,Math.round(cut*0.62));
-  const coreT=Math.min(245,Math.round(cut+38));
-  const allowed=new Uint8Array(w*h);
-  const core=new Uint8Array(w*h);
-  for(let i=0;i<gray.length;i++){ const v=gray[i]; if(v>=edgeT) allowed[i]=1; if(v>=coreT) core[i]=1; }
-
-  // Гистерезис по связности: низкоуверенная зона сохраняется только там,
-  // где она связана с уверенным ядром детали. Это отбрасывает отдельную тень.
-  const keep=new Uint8Array(w*h);
-  const dist=new Uint16Array(w*h);
-  dist.fill(65535);
-  const q=new Int32Array(w*h);
-  let head=0,tail=0;
-  for(let i=0;i<core.length;i++) if(core[i]){ keep[i]=1; dist[i]=0; q[tail++]=i; }
-  const maxD=edgeRadius;
-  while(head<tail){
-    const idx=q[head++], y=(idx/w)|0, x=idx-y*w, d=dist[idx];
-    if(d>=maxD) continue;
-    const n1=idx-1,n2=idx+1,n3=idx-w,n4=idx+w;
-    if(x>0 && allowed[n1] && !keep[n1]){keep[n1]=1;dist[n1]=d+1;q[tail++]=n1;}
-    if(x<w-1 && allowed[n2] && !keep[n2]){keep[n2]=1;dist[n2]=d+1;q[tail++]=n2;}
-    if(y>0 && allowed[n3] && !keep[n3]){keep[n3]=1;dist[n3]=d+1;q[tail++]=n3;}
-    if(y<h-1 && allowed[n4] && !keep[n4]){keep[n4]=1;dist[n4]=d+1;q[tail++]=n4;}
-  }
-
-  // Soft alpha: ядро 100%, край сохраняется плавно. Никакого глобального blur.
-  const alpha=new Uint8Array(w*h);
-  for(let i=0;i<alpha.length;i++){
-    if(!keep[i]){alpha[i]=0;continue;}
-    const v=gray[i];
-    const a=v<=edgeT?0:v>=coreT?255:Math.round((v-edgeT)*255/(coreT-edgeT));
-    alpha[i]=a;
-  }
-  return {alpha,w,h};
-}
-
-function alphaToCanvas(alpha,w,h,targetW,targetH){
-  const c0=document.createElement('canvas');c0.width=w;c0.height=h;
-  const ctx0=c0.getContext('2d',{willReadFrequently:true});
-  const img=ctx0.createImageData(w,h);
-  for(let i=0,p=0;i<alpha.length;i++,p+=4){const a=alpha[i];img.data[p]=img.data[p+1]=img.data[p+2]=a;img.data[p+3]=255;}
-  ctx0.putImageData(img,0,0);
-  if(w===targetW && h===targetH)return c0;
-  const c=document.createElement('canvas');c.width=targetW;c.height=targetH;
-  const ctx=c.getContext('2d',{willReadFrequently:true});ctx.imageSmoothingEnabled=true;ctx.imageSmoothingQuality='high';ctx.drawImage(c0,0,0,targetW,targetH);
-  return c;
-}
-
-function canvasToAlpha(canvas){
-  const w=canvas.width,h=canvas.height;
-  const d=canvas.getContext('2d',{willReadFrequently:true}).getImageData(0,0,w,h).data;
-  const a=new Uint8Array(w*h);
-  for(let i=0,p=0;i<a.length;i++,p+=4)a[i]=d[p];
-  return a;
-}
-
-function findBounds(alpha,w,h,cut=35){
-  let minX=w,minY=h,maxX=-1,maxY=-1;
-  for(let y=0;y<h;y++)for(let x=0;x<w;x++){const a=alpha[y*w+x];if(a>cut){if(x<minX)minX=x;if(x>maxX)maxX=x;if(y<minY)minY=y;if(y>maxY)maxY=y}}
-  return {minX,minY,maxX,maxY,ok:maxX>=0};
-}
-
-function buildCut(original,alpha,w,h,bounds){
-  const bw=bounds.maxX-bounds.minX+1,bh=bounds.maxY-bounds.minY+1;
-  const cut=document.createElement('canvas');cut.width=bw;cut.height=bh;
-  const ctx=cut.getContext('2d',{willReadFrequently:true});ctx.drawImage(original,bounds.minX,bounds.minY,bw,bh,0,0,bw,bh);
-  const img=ctx.getImageData(0,0,bw,bh);const d=img.data;
-  for(let y=0;y<bh;y++)for(let x=0;x<bw;x++)d[(y*bw+x)*4+3]=alpha[(bounds.minY+y)*w+(bounds.minX+x)];
-  ctx.putImageData(img,0,0);return cut;
-}
-
-function makeAlphaCanvas(alpha,w,h){
-  const c=document.createElement('canvas');c.width=w;c.height=h;const ctx=c.getContext('2d');const img=ctx.createImageData(w,h);
-  for(let i=0,p=0;i<alpha.length;i++,p+=4){const a=alpha[i];img.data[p]=img.data[p+1]=img.data[p+2]=a;img.data[p+3]=255}
-  ctx.putImageData(img,0,0);return c;
-}
-
-function sharpenObject(canvas,amount){
-  if(amount<=0)return;
-  const ctx=canvas.getContext('2d',{willReadFrequently:true}),w=canvas.width,h=canvas.height;
-  const img=ctx.getImageData(0,0,w,h),d=img.data,src=new Uint8ClampedArray(d);
-  const a=Math.max(0,Math.min(.2,amount));
-  const weights=[1,2,1,2,4,2,1,2,1];
-  for(let y=1;y<h-1;y++)for(let x=1;x<w-1;x++){
-    const i=(y*w+x)*4;
-    if(src[i]>249&&src[i+1]>249&&src[i+2]>249) continue;
-    for(let c=0;c<3;c++){
-      let blur=0,k=0;
-      for(let yy=-1;yy<=1;yy++)for(let xx=-1;xx<=1;xx++){blur+=src[((y+yy)*w+(x+xx))*4+c]*weights[k++];}
-      blur/=16;
-      d[i+c]=Math.max(0,Math.min(255,Math.round(src[i+c]+a*(src[i+c]-blur))));
-    }
-  }
-  ctx.putImageData(img,0,0);
-}
-
-async function getMaskFromPipeline(file,key){
-  const model=MODEL_CONFIG[key];
-  let pipe=await getPipe(key);
-  setStatus(`${model.label}: строю маску…`,60);
-  const url=URL.createObjectURL(file);
-  try{
-    // Передаём URL-строку, а не File/RawImage-объект. Это штатный ImageInput
-    // для Transformers.js и исключает ошибку "Inputs given to model: Object".
-    const result=await pipe(url,{threshold:.01,mask_threshold:.01,overlap_mask_area_threshold:.8});
-    if(!Array.isArray(result)||!result.length)throw new Error('Модель не вернула маску.');
-    const item=result.find(x=>String(x?.label||'').toLowerCase().includes('foreground'))||result[0];
-    if(!item?.mask)throw new Error('Модель вернула результат без mask.');
-    return item.mask;
-  }catch(e){
-    // Если конкретная сессия/граф испортились после предыдущего запуска, удаляем кеш
-    // и даём следующему нажатию создать чистую сессию.
-    pipes.delete(key);
-    throw e;
-  }finally{URL.revokeObjectURL(url);}
-}
-
-async function process(){
-  if(current<0 || processBtn.disabled)return;
-  processBtn.disabled=true;$('download').disabled=true;
-  try{
-    const file=files[current], im=await loadImage(file), original=canvasOfImage(im), w=original.width,h=original.height;
-    src.width=w;src.height=h;src.getContext('2d').drawImage(original,0,0);
-    const key=$('model').value;
-    const rawMask=await getMaskFromPipeline(file,key);
-    setStatus('Очищаю маску и удаляю тень…',72);
-    const refined=refineMaskHysteresis(rawMask,Number($('thr').value),8);
-    const maskCanvas=alphaToCanvas(refined.alpha,refined.w,refined.h,w,h);
-    const alpha=canvasToAlpha(maskCanvas);
-    const bounds=findBounds(alpha,w,h,8);
-    if(!bounds.ok)throw new Error('Модель не нашла объект.');
-
-    const pad=Math.max(1,Math.round(Math.min(w,h)*.003));
-    bounds.minX=Math.max(0,bounds.minX-pad);bounds.minY=Math.max(0,bounds.minY-pad);bounds.maxX=Math.min(w-1,bounds.maxX+pad);bounds.maxY=Math.min(h-1,bounds.maxY+pad);
-    const cut=buildCut(original,alpha,w,h,bounds);
-
-    const o=out.getContext('2d');o.clearRect(0,0,640,480);o.fillStyle='#fff';o.fillRect(0,0,640,480);
-    const bw=bounds.maxX-bounds.minX+1,bh=bounds.maxY-bounds.minY+1;
-    const scale=Math.min(600/bw,440/bh),dw=Math.max(1,Math.round(bw*scale)),dh=Math.max(1,Math.round(bh*scale));
-    const dx=Math.round((640-dw)/2),dy=Math.round((480-dh)/2);
-    o.imageSmoothingEnabled=true;o.imageSmoothingQuality='high';o.drawImage(cut,0,0,bw,bh,dx,dy,dw,dh);
-    baseCanvas=document.createElement('canvas');baseCanvas.width=640;baseCanvas.height=480;baseCanvas.getContext('2d').drawImage(out,0,0);
-    sharpenObject(out,Number($('sharp').value)/100);
-    setStatus(`Готово • ${MODEL_CONFIG[key].label} • отсечение ${$('thr').value}%`,100,'ok');
-    $('download').disabled=false;
-  }catch(e){console.error(e);setStatus('Ошибка: '+(e?.message||String(e)),0,'err')}
-  finally{processBtn.disabled=false}
-}
-
+async function process(){if(current<0||processBtn.disabled)return;processBtn.disabled=true;$('download').disabled=true;try{const file=files[current],im=await loadImage(file),original=canvasOfImage(im);src.width=original.width;src.height=original.height;src.getContext('2d').drawImage(original,0,0);const key=$('model').value;let raw=await getMask(file,key);setStatus('Уточняю контур и убираю серую тень…',72);let refined=makeAlpha(raw,original);refined.alpha=blurAlpha(refined.alpha,refined.w,refined.h,Number($('feather').value)/10);const b=findBounds(refined.alpha,refined.w,refined.h);if(!b.ok)throw new Error('Модель не нашла объект.');const pad=Math.max(2,Math.round(Math.min(original.width,original.height)*.004));b.minX=Math.max(0,b.minX-pad);b.minY=Math.max(0,b.minY-pad);b.maxX=Math.min(original.width-1,b.maxX+pad);b.maxY=Math.min(original.height-1,b.maxY+pad);const cut=buildCut(original,refined.alpha,refined.w,refined.h,b);const o=out.getContext('2d');o.clearRect(0,0,640,480);o.fillStyle='#fff';o.fillRect(0,0,640,480);const bw=b.maxX-b.minX+1,bh=b.maxY-b.minY+1,scale=Math.min(600/bw,440/bh),dw=Math.max(1,Math.round(bw*scale)),dh=Math.max(1,Math.round(bh*scale)),dx=Math.round((640-dw)/2),dy=Math.round((480-dh)/2);o.imageSmoothingEnabled=true;o.imageSmoothingQuality='high';o.drawImage(cut,0,0,bw,bh,dx,dy,dw,dh);baseCanvas=document.createElement('canvas');baseCanvas.width=640;baseCanvas.height=480;baseCanvas.getContext('2d').drawImage(out,0,0);setStatus(`Готово • ${key==='birefnet'?'BiRefNet Lite':key==='ormbg'?'ORMBG Q8':'Авто'} • порог ${$('thr').value}%`,100,'ok');$('download').disabled=false;applyZoom()}catch(e){console.error(e);setStatus('Ошибка: '+(e?.message||String(e)),0,'err')}finally{processBtn.disabled=false}}
 processBtn.onclick=process;
-$('download').onclick=()=>{
-  const png=$('format').value==='png';const type=png?'image/png':'image/jpeg';
-  out.toBlob(b=>{const a=document.createElement('a');a.href=URL.createObjectURL(b);a.download='detail-640x480.'+(png?'png':'jpg');a.click();setTimeout(()=>URL.revokeObjectURL(a.href),1000)},type,png?undefined:1);
-};
-$('reset').onclick=()=>{if(baseCanvas)out.getContext('2d').drawImage(baseCanvas,0,0)};
-$('erase').onclick=()=>workMode='erase';
-$('thr').oninput=e=>$('thrVal').textContent=e.target.value+'%';
-$('sharp').oninput=e=>$('sharpVal').textContent=(Number(e.target.value)/100).toFixed(2);
-
-let drawing=false;
-out.addEventListener('pointerdown',e=>{drawing=true;out.setPointerCapture(e.pointerId);paint(e)});
-out.addEventListener('pointermove',e=>{if(drawing)paint(e)});
-out.addEventListener('pointerup',()=>drawing=false);out.addEventListener('pointercancel',()=>drawing=false);
-function paint(e){if(workMode!=='erase')return;const r=out.getBoundingClientRect(),x=(e.clientX-r.left)*640/r.width,y=(e.clientY-r.top)*480/r.height,c=out.getContext('2d');c.fillStyle='#fff';c.beginPath();c.arc(x,y,Number($('brush').value),0,Math.PI*2);c.fill()}
+$('download').onclick=()=>{const png=$('format').value==='png';const type=png?'image/png':'image/jpeg';out.toBlob(b=>{const u=URL.createObjectURL(b),a=document.createElement('a');a.href=u;a.download='detail-640x480.'+(png?'png':'jpg');a.click();setTimeout(()=>URL.revokeObjectURL(u),1000)},type,png?undefined:1)};
+applyZoom();
 </script>
 </body>
 </html>
