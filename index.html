@@ -360,6 +360,36 @@ function refineThreshold(alpha, strength){
   return out;
 }
 
+function keepLargestForegroundComponent(alpha,w,h,minArea=200){
+  const step=Math.max(1,Math.ceil(Math.max(w,h)/900)), aw=Math.ceil(w/step), ah=Math.ceil(h/step);
+  const fg=new Uint8Array(aw*ah), vis=new Uint8Array(aw*ah), qx=new Int32Array(aw*ah), qy=new Int32Array(aw*ah);
+  for(let ay=0;ay<ah;ay++) for(let ax=0;ax<aw;ax++){
+    const x=Math.min(w-1,Math.floor((ax+.5)*step)), y=Math.min(h-1,Math.floor((ay+.5)*step));
+    fg[ay*aw+ax]=alpha[(y*w+x)*4+3]>170?1:0;
+  }
+  let best=null;
+  for(let sy=0;sy<ah;sy++) for(let sx=0;sx<aw;sx++){
+    const si=sy*aw+sx; if(!fg[si]||vis[si]) continue;
+    let head=0,tail=0; qx[tail]=sx;qy[tail]=sy;tail++;vis[si]=1;
+    while(head<tail){
+      const x=qx[head],y=qy[head++];
+      for(const [dx,dy] of [[1,0],[-1,0],[0,1],[0,-1]]){
+        const nx=x+dx,ny=y+dy;if(nx<0||ny<0||nx>=aw||ny>=ah)continue;
+        const ni=ny*aw+nx;if(fg[ni]&&!vis[ni]){vis[ni]=1;qx[tail]=nx;qy[tail]=ny;tail++;}
+      }
+    }
+    if(!best||tail>best.length) best={coords:Array.from({length:tail},(_,i)=>[qx[i],qy[i]]),length:tail};
+  }
+  if(!best || best.length*step*step<minArea) return alpha;
+  const out=new Uint8ClampedArray(alpha); out.fill(0);
+  // Preserve the original soft alpha inside the largest foreground component.
+  for(const [ax,ay] of best.coords){
+    const x0=ax*step,y0=ay*step,x1=Math.min(w,(ax+1)*step),y1=Math.min(h,(ay+1)*step);
+    for(let y=y0;y<y1;y++) for(let x=x0;x<x1;x++) out[(y*w+x)*4+3]=alpha[(y*w+x)*4+3];
+  }
+  return out;
+}
+
 function removeBorderForeground(alpha,w,h,minArea=120){
   // Remove foreground-like regions that are connected to the image border.
   // This is a safety net when a model leaks background into the mask.
@@ -588,15 +618,25 @@ async function process(){
     }
     const thresh=Number(ui.threshold.value);
     baseMask=refineThreshold(baseMask,thresh);
-    // Safety pass: eliminate large foreground regions connected to the photo border.
-    baseMask=removeBorderForeground(baseMask,srcData.width,srcData.height,160);
+    // Keep the main object instead of deleting every border-connected region.
+    // This is safer for parts whose soft mask touches the photo edge.
+    const beforeComponent=baseMask.slice();
+    baseMask=keepLargestForegroundComponent(baseMask,srcData.width,srcData.height,160);
     cov=maskCoverage(baseMask);
     if(cov.frac<0.001){
-      throw new Error('После очистки маска стала пустой. Уменьшите порог объекта.');
+      baseMask=beforeComponent;
+      cov=maskCoverage(baseMask);
+    }
+    if(cov.frac<0.001){
+      throw new Error('Модель вернула пустую маску.');
     }
     maskBase=baseMask;
     // Remove large background-looking regions that are trapped inside the object.
+    const preHole=maskBase.slice();
     let m=applyHoleCleanup(maskBase,srcData);
+    // Never let automatic hole cleanup destroy the object.
+    const preCov=maskCoverage(preHole).frac, postHoleCov=maskCoverage(m).frac;
+    if(postHoleCov < preCov*0.35) m=preHole;
     m=softenAndShadowClean(m,srcData);
     const softR=Number(ui.soft.value);
     if(softR>0)m=feather(m,srcData.width,srcData.height,softR);
