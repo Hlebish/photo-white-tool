@@ -32,7 +32,7 @@ button:disabled{opacity:.45;cursor:not-allowed}.check{display:flex;align-items:c
 <body>
 <div class="wrap"><main class="card">
 <h1>Фото деталей → чистый белый фон → 640×480</h1>
-<div class="lead">BiRefNet • сохранение структуры • PNG/JPG • обработка прямо в браузере</div>
+<div class="lead">BiRefNet • память экономится через AI-копию 1024 px • PNG/JPG • локальная обработка</div>
 
 <label class="drop" id="drop">
   <div><strong>📷 Нажми или перетащи фотографии сюда</strong><span>Можно выбрать сразу несколько JPG / PNG / WebP</span></div>
@@ -49,7 +49,7 @@ button:disabled{opacity:.45;cursor:not-allowed}.check{display:flex;align-items:c
   <button id="downloadAll" disabled>Скачать все</button>
 </div>
 
-<div id="status" class="status">Выбери фотографию.</div>
+<div id="status" class="status">Выбери фотографию.</div><div style="font-size:12px;color:#718096;margin-top:4px">AI-сегментация работает на уменьшенной копии до 1024 px, а результат накладывается обратно на оригинал — это предотвращает std::bad_alloc на больших фото.</div>
 <div class="progress"><div id="bar" class="bar"></div></div>
 
 <section class="grid">
@@ -225,25 +225,42 @@ async function processCurrent(){
   processBtn.disabled=true;
   try{
     const file=files[current];
-    msg("Читаю оригинал без изменения размера…",22);
+    msg("Читаю оригинал…",22);
     originalRaw=await RawImage.read(file);
     originalRGBA=rgbaFromRaw(originalRaw);
     drawSource();
 
-    const seg=await getSegmenter();
-    msg("AI выделяет основную деталь…",45);
-    const pred=await seg(originalRaw);
-    if(!Array.isArray(pred)||!pred.length||!pred[0].mask)throw new Error("BiRefNet не вернул маску.");
-    const m=pred[0].mask;
-    const mw=m.width,mh=m.height;
-    mask=cleanMask(new Uint8ClampedArray(m.data),mw,mh);
-    if(mw!==originalRaw.width||mh!==originalRaw.height)mask=resizeMask(mask,mw,mh,originalRaw.width,originalRaw.height);
+    // КРИТИЧЕСКИ ВАЖНО:
+    // Не отправляем 4000×3000/6000×4000 фото прямо в ONNX Runtime.
+    // Это может привести к std::bad_alloc в WASM.
+    // AI видит уменьшенную копию, а маска затем растягивается обратно
+    // на исходное разрешение — качество самой фотографии не уменьшается.
+    const fullW=originalRaw.width, fullH=originalRaw.height;
+    const AI_MAX=1024;
+    const aiScale=Math.min(1,AI_MAX/Math.max(fullW,fullH));
+    const aiW=Math.max(1,Math.round(fullW*aiScale));
+    const aiH=Math.max(1,Math.round(fullH*aiScale));
+    const aiImage=(aiScale<1)?await originalRaw.resize(aiW,aiH,{resample:3}):originalRaw;
 
+    const seg=await getSegmenter();
+    msg(`AI выделяет деталь (${aiW}×${aiH}, экономный режим памяти)…`,45);
+    const pred=await seg(aiImage);
+    if(!Array.isArray(pred)||!pred.length||!pred[0].mask)throw new Error("BiRefNet не вернул маску.");
+
+    const m=pred[0].mask;
+    let maskSmall=cleanMask(new Uint8ClampedArray(m.data),m.width,m.height);
+    mask=resizeMask(maskSmall,m.width,m.height,fullW,fullH);
+
+    // Освобождаем временные ссылки перед дальнейшей обработкой.
+    maskSmall=null;
+
+    // AI-upscale оставлен как отдельная опция, но НЕ нужен для удаления фона.
+    // Он не запускается автоматически, чтобы не создавать лишнюю нагрузку.
     if($("enhance").checked){
       try{
         msg("AI улучшает детали ×2…",65);
         const sr=await getUpscaler();
-        const baseW=originalRaw.width, baseH=originalRaw.height;
+        const baseW=originalRaw.width,baseH=originalRaw.height;
         const up=await sr(originalRaw);
         const upRaw=up instanceof RawImage?up:(up?.[0] instanceof RawImage?up[0]:null);
         if(upRaw&&upRaw.data){
@@ -251,18 +268,25 @@ async function processCurrent(){
           originalRGBA=rgbaFromRaw(upRaw);
           mask=resizeMask(mask,baseW,baseH,upRaw.width,upRaw.height);
         }
-      }catch(e){console.warn("Upscale skipped:",e);msg("Upscale пропущен — безопасно продолжаю без него.",68)}
+      }catch(e){
+        console.warn("Upscale skipped:",e);
+        msg("Удаление фона готово; AI-upscale пропущен из-за памяти.",68);
+      }
     }
+
     drawSource();
     buildResult();
-    msg("Готово. Если осталась грязь — используй «Ластик».","100","ok");
-    dirty=false;
+    msg("Готово. Если осталась грязь — используй «Ластик».",100,"ok");
   }catch(e){
     console.error(e);
-    msg("Ошибка: "+(e?.message||String(e)),0,"error");
+    const text=String(e?.message||e);
+    if(/bad_alloc|OrtRun|memory/i.test(text)){
+      msg("Не хватило памяти для AI. Попробуй фото меньшего размера или включи WebGPU в Chrome.",0,"error");
+    }else{
+      msg("Ошибка: "+text,0,"error");
+    }
   }finally{processBtn.disabled=false}
 }
-
 processBtn.onclick=processCurrent;
 
 function downloadCanvas(){
