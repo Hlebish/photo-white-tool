@@ -10,19 +10,19 @@
 .controls{display:flex;gap:9px;align-items:center;flex-wrap:wrap;margin-top:14px}button,select{font:inherit;padding:10px 13px;border:1px solid var(--line);border-radius:10px;background:#fff;cursor:pointer}button.primary{background:var(--blue);border-color:var(--blue);color:#fff;font-weight:700}button.active{border-color:var(--blue);color:var(--blue);background:#f1f6ff}button:disabled{opacity:.45;cursor:not-allowed}
 .status{margin-top:12px;color:var(--muted);min-height:22px}.status.err{color:var(--red);font-weight:600}.status.ok{color:var(--green);font-weight:600}.progress{height:7px;background:#e8edf2;border-radius:99px;overflow:hidden}.bar{height:100%;width:0;background:var(--blue);transition:width .2s}
 .grid{display:grid;grid-template-columns:1fr 1fr;gap:15px;margin-top:18px}.pane{border:1px solid var(--line);border-radius:14px;overflow:hidden}.pane h2{font-size:14px;margin:0;padding:10px 12px;border-bottom:1px solid var(--line)}
-.preview{min-height:330px;padding:12px;display:flex;align-items:center;justify-content:center;background:repeating-conic-gradient(#f0f2f4 0 25%,#fff 0 50%) 50%/22px 22px;overflow:auto}.preview canvas{display:block;max-width:none;max-height:none}
+.preview{min-height:330px;height:520px;padding:12px;display:flex;align-items:center;justify-content:center;background:repeating-conic-gradient(#f0f2f4 0 25%,#fff 0 50%) 50%/22px 22px;overflow:hidden}.preview canvas{display:block;width:auto;height:auto;max-width:100%;max-height:100%;object-fit:contain}
 .editor-head{display:flex;gap:7px;align-items:center;flex-wrap:wrap;border-bottom:1px solid var(--line);padding:8px 10px;background:#fbfcfd}.editor-head button{padding:7px 10px}.zoom-label{font-size:13px;color:var(--muted);min-width:48px;text-align:center}.editor{height:480px;overflow:auto;touch-action:none;cursor:crosshair;background:#f2f4f7;display:flex;align-items:flex-start;justify-content:flex-start}.editor-inner{padding:18px;min-width:max-content;min-height:max-content}.editor canvas{width:640px;height:480px;display:block;box-shadow:0 2px 12px #0001;transform-origin:top left}
 .tools{border-top:1px solid var(--line);padding:10px 12px;display:flex;gap:8px;align-items:center;flex-wrap:wrap}.tools label{font-size:13px;color:var(--muted)}
 .tuning{margin-top:15px;padding:12px;background:var(--soft);border:1px solid var(--line);border-radius:12px}.tuning-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}.tuning label{display:block;font-size:13px;color:var(--muted)}.tuning input[type=range]{width:100%}.value{font-weight:700;color:var(--ink)}
 .queue{margin-top:16px;display:grid;grid-template-columns:repeat(auto-fill,minmax(170px,1fr));gap:9px}.item{border:1px solid var(--line);border-radius:11px;padding:7px;cursor:pointer;background:#fff}.item.active{border:2px solid var(--blue)}.thumb{height:105px;display:flex;align-items:center;justify-content:center;background:#f5f7f9;border-radius:7px;overflow:hidden}.thumb img{max-width:100%;max-height:100%;object-fit:contain}.item small{display:block;margin-top:5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .note{margin-top:14px;background:#f5f8ff;border:1px solid #dce7ff;border-radius:11px;padding:11px 13px;color:#536a82;font-size:13px;line-height:1.5}.note b{color:#33475b}
-@media(max-width:800px){.wrap{width:calc(100% - 10px);margin:6px auto}.card{padding:13px}.grid{grid-template-columns:1fr}.preview{min-height:250px}.tuning-grid{grid-template-columns:1fr}h1{font-size:21px}.editor{height:390px}}
+@media(max-width:800px){.wrap{width:calc(100% - 10px);margin:6px auto}.card{padding:13px}.grid{grid-template-columns:1fr}.preview{min-height:250px;height:360px}.tuning-grid{grid-template-columns:1fr}h1{font-size:21px}.editor{height:390px}}
 </style>
 </head>
 <body>
 <div class="wrap"><main class="card">
 <h1>Фото деталей → чистый белый фон → 640×480</h1>
-<div class="sub">V17 • модели без проблемного custom/q8-режима • оригинальные пиксели детали сохраняются • редактор с приближением</div>
+<div class="sub">V18 • стабильный background-removal pipeline • исходные пиксели детали сохраняются • редактор с приближением</div>
 
 <label id="drop" class="drop"><div><strong>📷 Нажми или перетащи фотографии сюда</strong><span>Можно выбрать сразу несколько JPG / PNG / WebP</span></div><input id="files" type="file" accept="image/jpeg,image/png,image/webp" multiple></label>
 
@@ -30,9 +30,10 @@
 <button id="process" class="primary" disabled>Обработать</button>
 <label>Модель:
 <select id="model">
-<option value="birefnet">BiRefNet Lite • качество краёв (FP32)</option>
-<option value="ormbg">ORMBG • быстрый Q8</option>
-<option value="auto">Авто • BiRefNet → ORMBG при ошибке</option>
+<option value="birefnet">BiRefNet Lite • качество краёв</option>
+<option value="ormbg">ORMBG • стабильный Q8</option>
+<option value="ben2">BEN2 • эксперимент, высокое качество</option>
+<option value="auto">Авто • BiRefNet → ORMBG → BEN2</option>
 </select></label>
 <label>Вывод:<select id="format"><option value="png">PNG — без потерь</option><option value="jpg">JPG 100%</option></select></label>
 <button id="download" disabled>Скачать</button>
@@ -65,16 +66,16 @@
 </div>
 
 <div id="queue" class="queue"></div>
-<div class="note"><b>Почему V17:</b> проблемные варианты RMBG q8 и ISNet custom убраны из главного пути. Для высокой детализации используется официальный ONNX-пакет BiRefNet Lite; в его документации прямо показана загрузка через <code>AutoModel + AutoProcessor + RawImage</code>, вход 1024×1024 и получение alpha matte из <code>output_image</code>. Для лёгкого режима используется ORMBG, для которого опубликован q8-вес около 44 МБ и пример запуска через Transformers.js.</div>
+<div class="note"><b>Почему V18:</b> убран прямой ручной вызов ONNX BiRefNet, который у тебя падал с 240595976. Теперь BiRefNet Lite запускается через официальный <code>background-removal</code> pipeline; его репозиторий также документирует этот путь. Маска берётся из альфа-канала результата, а не усреднением RGB. Для ORMBG автоматически выбирается доступный 8-битный вариант; BEN2 оставлен как отдельный экспериментальный режим.</div>
 </main></div>
 
 <script type="module">
-import { pipeline, env, RawImage, AutoModel, AutoProcessor } from 'https://cdn.jsdelivr.net/npm/@huggingface/transformers@3.8.1';
+import { pipeline, env } from 'https://cdn.jsdelivr.net/npm/@huggingface/transformers@3.8.1';
 env.allowLocalModels=false;env.allowRemoteModels=true;env.useBrowserCache=true;
 const $=id=>document.getElementById(id);
 const filesEl=$('files'),drop=$('drop'),processBtn=$('process'),statusEl=$('status'),bar=$('bar'),src=$('src'),out=$('out'),queue=$('queue'),editor=$('editor'),editorInner=$('editorInner');
 let files=[],current=-1,baseCanvas=null,workMode='erase',zoom=1,spaceDown=false,drawing=false,panning=false,lastPan={x:0,y:0};
-let birefPromise=null,ormbPromise=null;
+let birefPromise=null,ormbPromise=null,ben2Promise=null;
 const cache=new Map();
 function setStatus(text,p=null,kind=''){statusEl.textContent=text;statusEl.className='status'+(kind?' '+kind:'');if(p!==null)bar.style.width=Math.max(0,Math.min(100,p))+'%';}
 function esc(s){return s.replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[c]))}
@@ -84,13 +85,83 @@ async function showSource(file){const im=await loadImage(file);src.width=im.natu
 function setFiles(list){files=[...list];current=files.length?0:-1;queue.innerHTML='';if(files.length)showSource(files[0]).catch(()=>{});files.forEach((f,i)=>{const el=document.createElement('div');el.className='item'+(i===0?' active':'');el.innerHTML=`<div class="thumb"><img></div><small>${esc(f.name)}</small>`;const im=el.querySelector('img');im.src=URL.createObjectURL(f);im.onload=()=>URL.revokeObjectURL(im.src);el.onclick=()=>{current=i;document.querySelectorAll('.item').forEach(x=>x.classList.remove('active'));el.classList.add('active');processBtn.disabled=false;showSource(f).catch(()=>{});setStatus('Выбрано: '+f.name)};queue.appendChild(el)});processBtn.disabled=!files.length;if(files.length)setStatus(`Выбрано: ${files[0].name}.`)}
 drop.onclick=()=>filesEl.click();drop.ondragover=e=>{e.preventDefault();drop.classList.add('drag')};drop.ondragleave=()=>drop.classList.remove('drag');drop.ondrop=e=>{e.preventDefault();drop.classList.remove('drag');setFiles(e.dataTransfer.files)};filesEl.onchange=e=>setFiles(e.target.files);
 
-async function getBiRefNet(){if(birefPromise)return birefPromise;setStatus('Загружаю BiRefNet Lite…',8);birefPromise=(async()=>{const model=await AutoModel.from_pretrained('onnx-community/BiRefNet_lite-ONNX',{dtype:'fp32',device:'wasm'});const processor=await AutoProcessor.from_pretrained('onnx-community/BiRefNet_lite-ONNX');return {model,processor}})();try{return await birefPromise}catch(e){birefPromise=null;throw e}}
-async function getORMBG(){if(ormbPromise)return ormbPromise;setStatus('Загружаю ORMBG Q8…',8);ormbPromise=pipeline('background-removal','onnx-community/ormbg-ONNX',{device:'wasm',dtype:'q8',progress_callback:i=>{const p=Number(i?.progress)||0;if(p>0)setStatus(`Загрузка ORMBG… ${Math.round(p)}%`,Math.min(55,10+p*.45))}});try{return await ormbPromise}catch(e){ormbPromise=null;throw e}}
-
-function rawImageToGray(raw){const w=raw.width,h=raw.height,ch=raw.channels||1,data=raw.data;const gray=new Uint8ClampedArray(w*h);for(let i=0,j=0;i<gray.length;i++){let v=data[j++];if(ch===2){v=data[j++]}else if(ch>=3){const g=data[j++],b=data[j++];v=Math.round((v+g+b)/3);if(ch===4)j++}gray[i]=v}let min=255,max=0;for(const v of gray){if(v<min)min=v;if(v>max)max=v}if(max-min>12 && (min>2||max<253)){for(let i=0;i<gray.length;i++)gray[i]=Math.round((gray[i]-min)*255/(max-min))}return {gray,w,h}}
-async function biRefMask(file){const {model,processor}=await getBiRefNet();setStatus('BiRefNet: строю маску 1024×1024…',60);const image=await RawImage.fromBlob(file);const inputs=await processor(image);const output=await model({input_image:inputs.pixel_values});const outTensor=output?.output_image ?? output?.[0] ?? output;const t=Array.isArray(outTensor)?outTensor[0]:outTensor;const matte=t.sigmoid().mul(255).to('uint8');let mask=RawImage.fromTensor(matte,'CHW');mask=await mask.resize(image.width,image.height,{resample:2});return rawImageToGray(mask)}
-async function ormbgMask(file){const seg=await getORMBG();setStatus('ORMBG: строю маску…',60);const u=URL.createObjectURL(file);try{const r=await seg([u]);const mask=r?.[0];if(!mask)throw new Error('ORMBG не вернул маску.');return rawImageToGray(mask)}finally{URL.revokeObjectURL(u)}}
-async function getMask(file,key){if(key==='birefnet')return biRefMask(file);if(key==='ormbg')return ormbgMask(file);try{return await biRefMask(file)}catch(e){console.warn('BiRefNet failed, fallback ORMBG',e);setStatus('BiRefNet не запустился — пробую ORMBG Q8…',42);return await ormbgMask(file)}}
+async function getBiRefNet(){
+  if(birefPromise)return birefPromise;
+  setStatus('Загружаю BiRefNet Lite…',8);
+  birefPromise=pipeline('background-removal','onnx-community/BiRefNet_lite-ONNX',{device:'wasm',dtype:'fp16',progress_callback:i=>{const p=Number(i?.progress)||0;if(p>0)setStatus(`Загрузка BiRefNet… ${Math.round(p)}%`,Math.min(58,10+p*.48))}})
+    .catch(async e=>{
+      console.warn('BiRefNet fp16 failed, fallback fp32',e);
+      setStatus('BiRefNet FP16 не запустился — пробую FP32…',18);
+      return await pipeline('background-removal','onnx-community/BiRefNet_lite-ONNX',{device:'wasm',dtype:'fp32',progress_callback:i=>{const p=Number(i?.progress)||0;if(p>0)setStatus(`Загрузка BiRefNet FP32… ${Math.round(p)}%`,Math.min(58,10+p*.48))}});
+    });
+  try{return await birefPromise}catch(e){birefPromise=null;throw e}
+}
+async function getORMBG(){
+  if(ormbPromise)return ormbPromise;
+  setStatus('Загружаю ORMBG…',8);
+  ormbPromise=(async()=>{
+    const dtypes=['q8','int8','uint8','fp16','fp32'];
+    let lastErr=null;
+    for(const dtype of dtypes){
+      try{
+        setStatus(`ORMBG: пробую ${dtype.toUpperCase()}…`,12);
+        return await pipeline('background-removal','onnx-community/ormbg-ONNX',{device:'wasm',dtype,progress_callback:i=>{const p=Number(i?.progress)||0;if(p>0)setStatus(`Загрузка ORMBG ${dtype.toUpperCase()}… ${Math.round(p)}%`,Math.min(58,10+p*.48))}});
+      }catch(e){lastErr=e;console.warn(`ORMBG ${dtype} failed`,e)}
+    }
+    throw lastErr||new Error('ORMBG не загрузился.');
+  })();
+  try{return await ormbPromise}catch(e){ormbPromise=null;throw e}
+}
+async function getBEN2(){
+  if(ben2Promise)return ben2Promise;
+  setStatus('Загружаю BEN2…',8);
+  ben2Promise=pipeline('background-removal','onnx-community/BEN2-ONNX',{device:'wasm',dtype:'fp16',progress_callback:i=>{const p=Number(i?.progress)||0;if(p>0)setStatus(`Загрузка BEN2… ${Math.round(p)}%`,Math.min(58,10+p*.48))}});
+  try{return await ben2Promise}catch(e){ben2Promise=null;throw e}
+}
+function rawImageToGray(raw){
+  const w=raw.width,h=raw.height,ch=raw.channels||1,data=raw.data;
+  const gray=new Uint8ClampedArray(w*h);
+  if(ch===4){
+    // Background-removal pipelines return RGBA; alpha is the actual mask.
+    for(let i=0,j=3;i<gray.length;i++,j+=4)gray[i]=data[j];
+  }else if(ch===2){
+    for(let i=0,j=1;i<gray.length;i++,j+=2)gray[i]=data[j];
+  }else{
+    for(let i=0,j=0;i<gray.length;i++){
+      if(ch===1)gray[i]=data[j++];
+      else{const r=data[j++],g=data[j++],b=data[j++];gray[i]=Math.round((r+g+b)/3)}
+    }
+  }
+  return {gray,w,h};
+}
+async function pipelineMask(file,loader,label){
+  const seg=await loader();
+  const u=URL.createObjectURL(file);
+  try{
+    setStatus(`${label}: строю маску…`,62);
+    const r=await seg(u);
+    const mask=r?.[0]??r;
+    if(!mask)throw new Error(`${label} не вернул маску.`);
+    return rawImageToGray(mask);
+  }finally{URL.revokeObjectURL(u)}
+}
+async function biRefMask(file){return pipelineMask(file,getBiRefNet,'BiRefNet Lite')}
+async function ormbgMask(file){return pipelineMask(file,getORMBG,'ORMBG')}
+async function ben2Mask(file){return pipelineMask(file,getBEN2,'BEN2')}
+async function getMask(file,key){
+  if(key==='birefnet')return biRefMask(file);
+  if(key==='ormbg')return ormbgMask(file);
+  if(key==='ben2')return ben2Mask(file);
+  try{return await biRefMask(file)}catch(e){
+    console.warn('BiRefNet failed, fallback ORMBG',e);
+    setStatus('BiRefNet не запустился — пробую ORMBG…',42);
+    try{return await ormbgMask(file)}catch(e2){
+      console.warn('ORMBG failed, fallback BEN2',e2);
+      setStatus('ORMBG не запустился — пробую BEN2…',48);
+      return await ben2Mask(file);
+    }
+  }
+}
 
 function sampleBackground(original){const ctx=original.getContext('2d',{willReadFrequently:true});const w=original.width,h=original.height;const pts=[];const step=Math.max(1,Math.floor(Math.min(w,h)/80));for(let x=0;x<w;x+=step){pts.push([x,0],[x,h-1])}for(let y=0;y<h;y+=step){pts.push([0,y],[w-1,y])}const vals=[];for(const [x,y] of pts){const d=ctx.getImageData(x,y,1,1).data;vals.push([d[0],d[1],d[2]])}vals.sort((a,b)=>(a[0]+a[1]+a[2])-(b[0]+b[1]+b[2]));const mid=vals[Math.floor(vals.length/2)]||[200,200,200];return mid}
 function dist3(r,g,b,bg){const dr=r-bg[0],dg=g-bg[1],db=b-bg[2];return Math.sqrt(dr*dr+dg*dg+db*db)}
@@ -118,7 +189,7 @@ $('erase').onclick=()=>{workMode='erase';$('erase').classList.add('active');$('r
 $('thr').oninput=e=>$('thrVal').textContent=e.target.value+'%';$('edge').oninput=e=>$('edgeVal').textContent=e.target.value+' px';$('shadow').oninput=e=>$('shadowVal').textContent=e.target.value+'%';$('feather').oninput=e=>$('featherVal').textContent=(Number(e.target.value)/10).toFixed(1)+' px';
 $('model').onchange=()=>{setStatus('Модель изменена. Нажми «Обработать» заново.');};
 
-async function process(){if(current<0||processBtn.disabled)return;processBtn.disabled=true;$('download').disabled=true;try{const file=files[current],im=await loadImage(file),original=canvasOfImage(im);src.width=original.width;src.height=original.height;src.getContext('2d').drawImage(original,0,0);const key=$('model').value;let raw=await getMask(file,key);setStatus('Уточняю контур и убираю серую тень…',72);let refined=makeAlpha(raw,original);refined.alpha=blurAlpha(refined.alpha,refined.w,refined.h,Number($('feather').value)/10);const b=findBounds(refined.alpha,refined.w,refined.h);if(!b.ok)throw new Error('Модель не нашла объект.');const pad=Math.max(2,Math.round(Math.min(original.width,original.height)*.004));b.minX=Math.max(0,b.minX-pad);b.minY=Math.max(0,b.minY-pad);b.maxX=Math.min(original.width-1,b.maxX+pad);b.maxY=Math.min(original.height-1,b.maxY+pad);const cut=buildCut(original,refined.alpha,refined.w,refined.h,b);const o=out.getContext('2d');o.clearRect(0,0,640,480);o.fillStyle='#fff';o.fillRect(0,0,640,480);const bw=b.maxX-b.minX+1,bh=b.maxY-b.minY+1,scale=Math.min(600/bw,440/bh),dw=Math.max(1,Math.round(bw*scale)),dh=Math.max(1,Math.round(bh*scale)),dx=Math.round((640-dw)/2),dy=Math.round((480-dh)/2);o.imageSmoothingEnabled=true;o.imageSmoothingQuality='high';o.drawImage(cut,0,0,bw,bh,dx,dy,dw,dh);baseCanvas=document.createElement('canvas');baseCanvas.width=640;baseCanvas.height=480;baseCanvas.getContext('2d').drawImage(out,0,0);setStatus(`Готово • ${key==='birefnet'?'BiRefNet Lite':key==='ormbg'?'ORMBG Q8':'Авто'} • порог ${$('thr').value}%`,100,'ok');$('download').disabled=false;applyZoom()}catch(e){console.error(e);setStatus('Ошибка: '+(e?.message||String(e)),0,'err')}finally{processBtn.disabled=false}}
+async function process(){if(current<0||processBtn.disabled)return;processBtn.disabled=true;$('download').disabled=true;try{const file=files[current],im=await loadImage(file),original=canvasOfImage(im);src.width=original.width;src.height=original.height;src.getContext('2d').drawImage(original,0,0);const key=$('model').value;let raw=await getMask(file,key);setStatus('Уточняю контур и убираю серую тень…',72);let refined=makeAlpha(raw,original);refined.alpha=blurAlpha(refined.alpha,refined.w,refined.h,Number($('feather').value)/10);const b=findBounds(refined.alpha,refined.w,refined.h);if(!b.ok)throw new Error('Модель не нашла объект.');const pad=Math.max(2,Math.round(Math.min(original.width,original.height)*.004));b.minX=Math.max(0,b.minX-pad);b.minY=Math.max(0,b.minY-pad);b.maxX=Math.min(original.width-1,b.maxX+pad);b.maxY=Math.min(original.height-1,b.maxY+pad);const cut=buildCut(original,refined.alpha,refined.w,refined.h,b);const o=out.getContext('2d');o.clearRect(0,0,640,480);o.fillStyle='#fff';o.fillRect(0,0,640,480);const bw=b.maxX-b.minX+1,bh=b.maxY-b.minY+1,scale=Math.min(600/bw,440/bh),dw=Math.max(1,Math.round(bw*scale)),dh=Math.max(1,Math.round(bh*scale)),dx=Math.round((640-dw)/2),dy=Math.round((480-dh)/2);o.imageSmoothingEnabled=true;o.imageSmoothingQuality='high';o.drawImage(cut,0,0,bw,bh,dx,dy,dw,dh);baseCanvas=document.createElement('canvas');baseCanvas.width=640;baseCanvas.height=480;baseCanvas.getContext('2d').drawImage(out,0,0);setStatus(`Готово • ${key==='birefnet'?'BiRefNet Lite':key==='ormbg'?'ORMBG':key==='ben2'?'BEN2':'Авто'} • порог ${$('thr').value}%`,100,'ok');$('download').disabled=false;applyZoom()}catch(e){console.error(e);setStatus('Ошибка: '+(e?.message||String(e)),0,'err')}finally{processBtn.disabled=false}}
 processBtn.onclick=process;
 $('download').onclick=()=>{const png=$('format').value==='png';const type=png?'image/png':'image/jpeg';out.toBlob(b=>{const u=URL.createObjectURL(b),a=document.createElement('a');a.href=u;a.download='detail-640x480.'+(png?'png':'jpg');a.click();setTimeout(()=>URL.revokeObjectURL(u),1000)},type,png?undefined:1)};
 applyZoom();
