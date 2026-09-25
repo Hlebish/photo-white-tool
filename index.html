@@ -26,7 +26,7 @@ button,select{font:inherit;padding:10px 13px;border:1px solid var(--line);border
 <body>
 <div class="wrap"><main class="card">
 <h1>Фото деталей → чистый белый фон → 640×480</h1>
-<div class="sub">V15 • прямой запуск моделей через Transformers.js • вход конвертируется в RawImage • AI не изменяет пиксели самой детали</div>
+<div class="sub">V16 • стабильный WASM-процессинг • AI строит только маску • оригинальные пиксели детали не перерисовываются</div>
 
 <label id="drop" class="drop">
   <div><strong>📷 Нажми или перетащи фотографии сюда</strong><span>Можно выбрать сразу несколько JPG / PNG / WebP</span></div>
@@ -37,9 +37,9 @@ button,select{font:inherit;padding:10px 13px;border:1px solid var(--line);border
   <button id="process" class="primary" disabled>Обработать</button>
   <label>Модель:
     <select id="model">
-      <option value="rmbg14">RMBG-1.4 • 44 МБ q8 — рекомендую</option>
-      <option value="isnet">ISNet General • q8 — контур/детали</option>
-      <option value="birefnet">BiRefNet Lite • high quality — тяжёлая</option>
+      <option value="rmbg14">RMBG-1.4 • q8 • основной</option>
+      <option value="isnet">ISNet General • q8 • эксперимент</option>
+      <option value="birefnet">BiRefNet Lite • fp32 • эксперимент</option>
     </select>
   </label>
   <label>Вывод:
@@ -50,14 +50,14 @@ button,select{font:inherit;padding:10px 13px;border:1px solid var(--line);border
 
 <div class="tuning">
   <div class="tuning-grid">
-    <label>Удаление серого фона / теней: <span id="thrVal" class="value">60%</span>
-      <input id="thr" type="range" min="45" max="82" value="60">
+    <label>Отсечение слабого фона: <span id="thrVal" class="value">42%</span>
+      <input id="thr" type="range" min="28" max="60" value="42">
     </label>
-    <label>Резкость после 640×480: <span id="sharpVal" class="value">0.35</span>
-      <input id="sharp" type="range" min="0" max="70" value="35">
+    <label>Лёгкая резкость после 640×480: <span id="sharpVal" class="value">0.00</span>
+      <input id="sharp" type="range" min="0" max="20" value="0">
     </label>
   </div>
-  <div style="margin-top:8px;color:var(--muted);font-size:13px">Более высокий порог сильнее убирает тени и ореолы. Резкость применяется только внутри объекта.</div>
+  <div style="margin-top:8px;color:var(--muted);font-size:13px">Вместо жёсткого обрезания используем связную маску: слабый фон отбрасывается, а тонкая граница детали сохраняется. По умолчанию резкость выключена.</div>
 </div>
 
 <div id="status" class="status">Выбери фотографию.</div>
@@ -75,7 +75,7 @@ button,select{font:inherit;padding:10px 13px;border:1px solid var(--line);border
 </div>
 
 <div id="queue" class="queue"></div>
-<div class="note"><b>Как сделано:</b> модель строит только маску. Оригинальная фотография детали берётся напрямую из исходника. Никаких AI-изменений текстуры, граней или цвета самой детали нет. Маска после AI очищается от слабых теней, затем выполняется один финальный resize до 640×480. Для первого теста оставь <b>RMBG-1.4</b> и порог <b>60%</b>.</div>
+<div class="note"><b>Как сделано:</b> модель строит только маску. Оригинальная фотография детали берётся напрямую из исходника. Никаких AI-изменений текстуры, граней или цвета самой детали нет. Маска после AI очищается от слабых теней, затем выполняется один финальный resize до 640×480. Для первого теста оставь <b>RMBG-1.4</b>, отсечение <b>42%</b> и резкость <b>0</b>.</div>
 </main></div>
 
 <script type="module">
@@ -100,20 +100,8 @@ function setStatus(text,p=null,kind=''){
 function esc(s){return s.replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[c]))}
 function loadImage(blob){return new Promise((res,rej)=>{const im=new Image();im.onload=()=>{URL.revokeObjectURL(im.src);res(im)};im.onerror=rej;im.src=URL.createObjectURL(blob)})}
 function canvasOfImage(im){const c=document.createElement('canvas');c.width=im.naturalWidth||im.width;c.height=im.naturalHeight||im.height;c.getContext('2d').drawImage(im,0,0);return c}
-function hasWebGPU(){return !!navigator.gpu}
-
 async function getRuntime(){
-  if(currentRuntimePromise) return currentRuntimePromise;
-  currentRuntimePromise=(async()=>{
-    if(hasWebGPU()){
-      try{
-        const adapter=await navigator.gpu.requestAdapter();
-        if(adapter){return {device:'webgpu',dtype:'fp16',name:'WebGPU'}}
-      }catch(e){console.warn('WebGPU unavailable, fallback to WASM',e)}
-    }
-    return {device:'wasm',dtype:'q8',name:'WASM q8'};
-  })();
-  return currentRuntimePromise;
+  return {device:'wasm',name:'WASM'};
 }
 
 const MODEL_CONFIG={
@@ -126,14 +114,14 @@ async function getPipe(key){
   if(pipes.has(key)) return pipes.get(key);
   const cfg=MODEL_CONFIG[key];
   const rt=await getRuntime();
-  const dtype=rt.device==='webgpu'?cfg.webgpuDtype:cfg.wasmDtype;
+  const dtype=cfg.wasmDtype;
   setStatus(`Загружаю ${cfg.label} (${rt.name}, ${dtype})…`,8);
-  const p=pipeline('image-segmentation',cfg.id,{device:rt.device,dtype,progress_callback:info=>{
+  const promise=pipeline('image-segmentation',cfg.id,{device:rt.device,dtype,progress_callback:info=>{
     const pct=Number(info?.progress)||0;
     if(Number.isFinite(pct) && pct>0) setStatus(`Загрузка ${cfg.label}… ${Math.round(pct)}%`,Math.min(55,10+pct*.45));
   }});
-  pipes.set(key,p);
-  try{return await p;}catch(e){pipes.delete(key);throw e;}
+  pipes.set(key,promise);
+  try{return await promise;}catch(e){pipes.delete(key);throw e;}
 }
 
 async function showSourcePreview(file){
@@ -160,76 +148,81 @@ drop.ondragleave=()=>drop.classList.remove('drag');
 drop.ondrop=e=>{e.preventDefault();drop.classList.remove('drag');setFiles(e.dataTransfer.files)};
 filesEl.onchange=e=>setFiles(e.target.files);
 
-function getMaskCanvas(rawMask,width,height){
-  // RawImage обычно одноканальный; конвертируем и масштабируем один раз.
-  const mask = rawMask.channels===1 ? rawMask : rawMask.grayscale();
-  if(mask.width===width && mask.height===height){
-    const c=document.createElement('canvas');c.width=width;c.height=height;
-    const ctx=c.getContext('2d',{willReadFrequently:true});
-    const rgba=new Uint8ClampedArray(width*height*4);
-    for(let i=0,j=0;i<mask.data.length;i++,j+=4){const v=mask.data[i];rgba[j]=rgba[j+1]=rgba[j+2]=v;rgba[j+3]=255}
-    ctx.putImageData(new ImageData(rgba,width,height),0,0);return c;
+function rawMaskToGray(rawMask){
+  const w=rawMask.width,h=rawMask.height;
+  const ch=rawMask.channels||1;
+  const src=rawMask.data;
+  const gray=new Uint8ClampedArray(w*h);
+  let min=255,max=0;
+  for(let i=0,j=0;i<gray.length;i++){
+    let v=src[j++];
+    if(ch>=3){ const g=src[j++], b=src[j++]; v=Math.round((v+g+b)/3); if(ch===4) j++; }
+    else if(ch===2){ j++; }
+    gray[i]=v; if(v<min)min=v; if(v>max)max=v;
   }
-  const c0=document.createElement('canvas');c0.width=mask.width;c0.height=mask.height;
-  const d0=c0.getContext('2d',{willReadFrequently:true});
-  const rgba=new Uint8ClampedArray(mask.width*mask.height*4);
-  for(let i=0,j=0;i<mask.data.length;i++,j+=4){const v=mask.data[i];rgba[j]=rgba[j+1]=rgba[j+2]=v;rgba[j+3]=255}
-  d0.putImageData(new ImageData(rgba,mask.width,mask.height),0,0);
-  const c=document.createElement('canvas');c.width=width;c.height=height;
-  const ctx=c.getContext('2d',{willReadFrequently:true});ctx.imageSmoothingEnabled=true;ctx.imageSmoothingQuality='high';ctx.drawImage(c0,0,0,width,height);
-  return c;
+  // Некоторые модели отдают вероятность с очень узким диапазоном.
+  // Нормализуем только если диапазон действительно ненулевой.
+  if(max-min>=8 && (min>3 || max<252)) for(let i=0;i<gray.length;i++) gray[i]=Math.round((gray[i]-min)*255/(max-min));
+  return {gray,w,h};
 }
 
-function maskToAlpha(maskCanvas,thresholdPct,featherPct){
-  const w=maskCanvas.width,h=maskCanvas.height;
-  const data=maskCanvas.getContext('2d',{willReadFrequently:true}).getImageData(0,0,w,h).data;
+function refineMaskHysteresis(rawMask,cutPct,edgeRadius=7){
+  const {gray,w,h}=rawMaskToGray(rawMask);
+  const cut=Math.round(cutPct*2.55);
+  const edgeT=Math.max(12,Math.round(cut*0.62));
+  const coreT=Math.min(245,Math.round(cut+38));
+  const allowed=new Uint8Array(w*h);
+  const core=new Uint8Array(w*h);
+  for(let i=0;i<gray.length;i++){ const v=gray[i]; if(v>=edgeT) allowed[i]=1; if(v>=coreT) core[i]=1; }
+
+  // Гистерезис по связности: низкоуверенная зона сохраняется только там,
+  // где она связана с уверенным ядром детали. Это отбрасывает отдельную тень.
+  const keep=new Uint8Array(w*h);
+  const dist=new Uint16Array(w*h);
+  dist.fill(65535);
+  const q=new Int32Array(w*h);
+  let head=0,tail=0;
+  for(let i=0;i<core.length;i++) if(core[i]){ keep[i]=1; dist[i]=0; q[tail++]=i; }
+  const maxD=edgeRadius;
+  while(head<tail){
+    const idx=q[head++], y=(idx/w)|0, x=idx-y*w, d=dist[idx];
+    if(d>=maxD) continue;
+    const n1=idx-1,n2=idx+1,n3=idx-w,n4=idx+w;
+    if(x>0 && allowed[n1] && !keep[n1]){keep[n1]=1;dist[n1]=d+1;q[tail++]=n1;}
+    if(x<w-1 && allowed[n2] && !keep[n2]){keep[n2]=1;dist[n2]=d+1;q[tail++]=n2;}
+    if(y>0 && allowed[n3] && !keep[n3]){keep[n3]=1;dist[n3]=d+1;q[tail++]=n3;}
+    if(y<h-1 && allowed[n4] && !keep[n4]){keep[n4]=1;dist[n4]=d+1;q[tail++]=n4;}
+  }
+
+  // Soft alpha: ядро 100%, край сохраняется плавно. Никакого глобального blur.
   const alpha=new Uint8Array(w*h);
-  const t=thresholdPct/100*255;
-  const feather=featherPct/100*255;
-  const lo=Math.max(0,t-feather), hi=Math.min(255,t+feather);
-  for(let i=0,p=0;i<alpha.length;i++,p+=4){
-    const v=(data[p]+data[p+1]+data[p+2])/3;
-    alpha[i]=v<=lo?0:v>=hi?255:Math.round((v-lo)*255/(hi-lo));
+  for(let i=0;i<alpha.length;i++){
+    if(!keep[i]){alpha[i]=0;continue;}
+    const v=gray[i];
+    const a=v<=edgeT?0:v>=coreT?255:Math.round((v-edgeT)*255/(coreT-edgeT));
+    alpha[i]=a;
   }
   return {alpha,w,h};
 }
 
-function largestComponent(alpha,w,h,minValue=200){
-  // Удаляем мелкий отдельно стоящий мусор. Основную деталь оставляем целиком.
-  const binary=new Uint8Array(w*h);
-  for(let i=0;i<binary.length;i++) binary[i]=alpha[i]>=minValue?1:0;
-  const seen=new Uint8Array(binary.length);
-  const comps=[];
-  const qx=new Int32Array(binary.length);const qy=new Int32Array(binary.length);
-  for(let y=0;y<h;y++)for(let x=0;x<w;x++){
-    const start=y*w+x;if(!binary[start]||seen[start])continue;
-    let head=0,tail=0;qx[tail]=x;qy[tail]=y;tail++;seen[start]=1;let area=0;
-    while(head<tail){const cx=qx[head],cy=qy[head];head++;area++;const n1=cy*w+cx-1,n2=cy*w+cx+1,n3=(cy-1)*w+cx,n4=(cy+1)*w+cx;
-      if(cx>0&&binary[n1]&&!seen[n1]){seen[n1]=1;qx[tail]=cx-1;qy[tail]=cy;tail++}
-      if(cx<w-1&&binary[n2]&&!seen[n2]){seen[n2]=1;qx[tail]=cx+1;qy[tail]=cy;tail++}
-      if(cy>0&&binary[n3]&&!seen[n3]){seen[n3]=1;qx[tail]=cx;qy[tail]=cy-1;tail++}
-      if(cy<h-1&&binary[n4]&&!seen[n4]){seen[n4]=1;qx[tail]=cx;qy[tail]=cy+1;tail++}
-    }
-    comps.push({area,startX:x,startY:y,coords:tail});
-  }
-  if(!comps.length)return alpha;
-  comps.sort((a,b)=>b.area-a.area);
-  const keepArea=comps[0].area;
-  const keepThreshold=Math.max(120,Math.round(keepArea*0.003));
-  // Re-run flood fill, but only retain components above threshold.
-  const out=new Uint8Array(alpha.length),visited=new Uint8Array(binary.length);
-  const stackX=new Int32Array(binary.length),stackY=new Int32Array(binary.length);
-  for(let y=0;y<h;y++)for(let x=0;x<w;x++){
-    const start=y*w+x;if(!binary[start]||visited[start])continue;
-    let head=0,tail=0,area=0;stackX[tail]=x;stackY[tail]=y;tail++;visited[start]=1;
-    const indices=[];
-    while(head<tail){const cx=stackX[head],cy=stackY[head];head++;area++;indices.push(cy*w+cx);
-      const ns=[[cx-1,cy],[cx+1,cy],[cx,cy-1],[cx,cy+1]];
-      for(const [nx,ny] of ns)if(nx>=0&&nx<w&&ny>=0&&ny<h){const ni=ny*w+nx;if(binary[ni]&&!visited[ni]){visited[ni]=1;stackX[tail]=nx;stackY[tail]=ny;tail++}}
-    }
-    if(area>=keepThreshold){for(const idx of indices)out[idx]=alpha[idx]}
-  }
-  return out;
+function alphaToCanvas(alpha,w,h,targetW,targetH){
+  const c0=document.createElement('canvas');c0.width=w;c0.height=h;
+  const ctx0=c0.getContext('2d',{willReadFrequently:true});
+  const img=ctx0.createImageData(w,h);
+  for(let i=0,p=0;i<alpha.length;i++,p+=4){const a=alpha[i];img.data[p]=img.data[p+1]=img.data[p+2]=a;img.data[p+3]=255;}
+  ctx0.putImageData(img,0,0);
+  if(w===targetW && h===targetH)return c0;
+  const c=document.createElement('canvas');c.width=targetW;c.height=targetH;
+  const ctx=c.getContext('2d',{willReadFrequently:true});ctx.imageSmoothingEnabled=true;ctx.imageSmoothingQuality='high';ctx.drawImage(c0,0,0,targetW,targetH);
+  return c;
+}
+
+function canvasToAlpha(canvas){
+  const w=canvas.width,h=canvas.height;
+  const d=canvas.getContext('2d',{willReadFrequently:true}).getImageData(0,0,w,h).data;
+  const a=new Uint8Array(w*h);
+  for(let i=0,p=0;i<a.length;i++,p+=4)a[i]=d[p];
+  return a;
 }
 
 function findBounds(alpha,w,h,cut=35){
@@ -256,14 +249,17 @@ function makeAlphaCanvas(alpha,w,h){
 function sharpenObject(canvas,amount){
   if(amount<=0)return;
   const ctx=canvas.getContext('2d',{willReadFrequently:true}),w=canvas.width,h=canvas.height;
-  const img=ctx.getImageData(0,0,w,h),d=img.data,copy=new Uint8ClampedArray(d),a=amount;
+  const img=ctx.getImageData(0,0,w,h),d=img.data,src=new Uint8ClampedArray(d);
+  const a=Math.max(0,Math.min(.2,amount));
+  const weights=[1,2,1,2,4,2,1,2,1];
   for(let y=1;y<h-1;y++)for(let x=1;x<w-1;x++){
     const i=(y*w+x)*4;
-    // Только если пиксель действительно принадлежит объекту.
-    if(copy[i]>250&&copy[i+1]>250&&copy[i+2]>250)continue;
+    if(src[i]>249&&src[i+1]>249&&src[i+2]>249) continue;
     for(let c=0;c<3;c++){
-      const v=copy[i+c],n=copy[i-4+c]+copy[i+4+c]+copy[i-4*w+c]+copy[i+4*w+c];
-      d[i+c]=Math.max(0,Math.min(255,Math.round(v*(1+4*a)-n*a)));
+      let blur=0,k=0;
+      for(let yy=-1;yy<=1;yy++)for(let xx=-1;xx<=1;xx++){blur+=src[((y+yy)*w+(x+xx))*4+c]*weights[k++];}
+      blur/=16;
+      d[i+c]=Math.max(0,Math.min(255,Math.round(src[i+c]+a*(src[i+c]-blur))));
     }
   }
   ctx.putImageData(img,0,0);
@@ -271,38 +267,43 @@ function sharpenObject(canvas,amount){
 
 async function getMaskFromPipeline(file,key){
   const model=MODEL_CONFIG[key];
-  const pipe=await getPipe(key);
-  setStatus(`${model.label}: выделяю объект…`,60);
-  // IMPORTANT: File objects can pass through the browser boundary as plain objects in some Transformers.js/ONNX paths.
-  // Convert explicitly to RawImage, which is the documented image input type for the pipeline.
-  const inputImage = await RawImage.fromBlob(file);
-  const result=await pipe(inputImage,{threshold:.15,mask_threshold:.05,overlap_mask_area_threshold:.5});
-  if(!Array.isArray(result)||!result.length)throw new Error('Модель не вернула маску.');
-  // Для background-removal моделей foreground обычно единственный сегмент.
-  const item=result.find(x=>String(x?.label||'').toLowerCase().includes('foreground'))||result[0];
-  if(!item?.mask)throw new Error('Модель вернула результат без mask.');
-  return item.mask;
+  let pipe=await getPipe(key);
+  setStatus(`${model.label}: строю маску…`,60);
+  const url=URL.createObjectURL(file);
+  try{
+    // Передаём URL-строку, а не File/RawImage-объект. Это штатный ImageInput
+    // для Transformers.js и исключает ошибку "Inputs given to model: Object".
+    const result=await pipe(url,{threshold:.01,mask_threshold:.01,overlap_mask_area_threshold:.8});
+    if(!Array.isArray(result)||!result.length)throw new Error('Модель не вернула маску.');
+    const item=result.find(x=>String(x?.label||'').toLowerCase().includes('foreground'))||result[0];
+    if(!item?.mask)throw new Error('Модель вернула результат без mask.');
+    return item.mask;
+  }catch(e){
+    // Если конкретная сессия/граф испортились после предыдущего запуска, удаляем кеш
+    // и даём следующему нажатию создать чистую сессию.
+    pipes.delete(key);
+    throw e;
+  }finally{URL.revokeObjectURL(url);}
 }
 
 async function process(){
-  if(current<0)return;
+  if(current<0 || processBtn.disabled)return;
   processBtn.disabled=true;$('download').disabled=true;
   try{
     const file=files[current], im=await loadImage(file), original=canvasOfImage(im), w=original.width,h=original.height;
     src.width=w;src.height=h;src.getContext('2d').drawImage(original,0,0);
     const key=$('model').value;
     const rawMask=await getMaskFromPipeline(file,key);
-    setStatus('Очищаю маску от теней и мелкого мусора…',72);
-    const maskCanvas=getMaskCanvas(rawMask,w,h);
-    // Узкая зона пера: контур остаётся жёстким, но без ступенек.
-    const threshold=Number($('thr').value);
-    const {alpha}=maskToAlpha(maskCanvas,threshold,3.5);
-    const cleaned=largestComponent(alpha,w,h,205);
-    const bounds=findBounds(cleaned,w,h,40);
-    if(!bounds.ok)throw new Error('Модель не нашла объект. Попробуй другой порог или другую модель.');
-    const pad=Math.max(2,Math.round(Math.min(w,h)*.006));
+    setStatus('Очищаю маску и удаляю тень…',72);
+    const refined=refineMaskHysteresis(rawMask,Number($('thr').value),8);
+    const maskCanvas=alphaToCanvas(refined.alpha,refined.w,refined.h,w,h);
+    const alpha=canvasToAlpha(maskCanvas);
+    const bounds=findBounds(alpha,w,h,8);
+    if(!bounds.ok)throw new Error('Модель не нашла объект.');
+
+    const pad=Math.max(1,Math.round(Math.min(w,h)*.003));
     bounds.minX=Math.max(0,bounds.minX-pad);bounds.minY=Math.max(0,bounds.minY-pad);bounds.maxX=Math.min(w-1,bounds.maxX+pad);bounds.maxY=Math.min(h-1,bounds.maxY+pad);
-    const cut=buildCut(original,cleaned,w,h,bounds);
+    const cut=buildCut(original,alpha,w,h,bounds);
 
     const o=out.getContext('2d');o.clearRect(0,0,640,480);o.fillStyle='#fff';o.fillRect(0,0,640,480);
     const bw=bounds.maxX-bounds.minX+1,bh=bounds.maxY-bounds.minY+1;
@@ -311,9 +312,9 @@ async function process(){
     o.imageSmoothingEnabled=true;o.imageSmoothingQuality='high';o.drawImage(cut,0,0,bw,bh,dx,dy,dw,dh);
     baseCanvas=document.createElement('canvas');baseCanvas.width=640;baseCanvas.height=480;baseCanvas.getContext('2d').drawImage(out,0,0);
     sharpenObject(out,Number($('sharp').value)/100);
-    setStatus(`Готово • ${MODEL_CONFIG[key].label} • порог ${threshold}%`,100,'ok');
+    setStatus(`Готово • ${MODEL_CONFIG[key].label} • отсечение ${$('thr').value}%`,100,'ok');
     $('download').disabled=false;
-  }catch(e){console.error(e);setStatus('Ошибка: '+(e?.message||e),0,'err')}
+  }catch(e){console.error(e);setStatus('Ошибка: '+(e?.message||String(e)),0,'err')}
   finally{processBtn.disabled=false}
 }
 
