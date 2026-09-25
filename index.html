@@ -363,23 +363,42 @@ function refineThreshold(alpha, strength){
 }
 
 function makeUsableThresholdMask(alpha,w,h,requested){
-  // BiRefNet confidence can be much lower than usual on dark, reflective,
-  // or tightly cropped parts. Retry progressively softer cutoffs before failing.
-  const candidates=[];
-  for(let t=requested;t>=0.03;t-=0.05) candidates.push(Math.max(0.03,Number(t.toFixed(2))));
-  if(!candidates.includes(0.03)) candidates.push(0.03);
-  let best=null;
-  for(const threshold of candidates){
+  // Lower thresholds expand the foreground; higher thresholds shrink it.
+  // Search both directions and never accept an almost-full-frame mask.
+  const candidates=new Set([Number(requested.toFixed(2))]);
+  for(let delta=0.05;delta<=0.95;delta+=0.05){
+    const lower=Number((requested-delta).toFixed(2));
+    const higher=Number((requested+delta).toFixed(2));
+    if(lower>=0.03)candidates.add(lower);
+    if(higher<=0.98)candidates.add(higher);
+  }
+  const ordered=[...candidates].sort((a,b)=>Math.abs(a-requested)-Math.abs(b-requested));
+  for(const threshold of ordered){
     const candidate=refineThreshold(alpha,threshold);
     const coverage=maskCoverage(candidate);
     if(coverage.frac>=0.001 && coverage.frac<=0.98){
-      // Prefer the requested threshold when it yields a nontrivial object.
       return {mask:candidate,threshold,coverage};
     }
-    if(!best || coverage.frac>best.coverage.frac) best={mask:candidate,threshold,coverage};
   }
-  if(best && best.coverage.frac>=0.001) return best;
   return null;
+}
+
+function invertMask(alpha){
+  const out=new Uint8ClampedArray(alpha);
+  for(let i=3;i<out.length;i+=4)out[i]=255-alpha[i];
+  return out;
+}
+
+function maskBorderCoverage(alpha,w,h){
+  const bx=Math.max(2,Math.floor(w*0.04)),by=Math.max(2,Math.floor(h*0.04));
+  let foreground=0,total=0;
+  for(let y=0;y<h;y+=2)for(let x=0;x<w;x+=2){
+    if(x<bx||x>=w-bx||y<by||y>=h-by){
+      total++;
+      if(alpha[(y*w+x)*4+3]>128)foreground++;
+    }
+  }
+  return foreground/(total||1);
 }
 
 function keepLargestForegroundComponent(alpha,w,h,minArea=200){
@@ -646,19 +665,22 @@ async function process(){
     const rawMask=best.mask || best;
     let baseMask=maskFromAny(rawMask,srcData.width,srcData.height);
     baseMask=normalizeMaskPolarity(baseMask,srcData.width,srcData.height);
-    let cov=maskCoverage(baseMask);
-    if(cov.frac>0.995){
-      const inv=new Uint8ClampedArray(baseMask);
-      for(let i=3;i<inv.length;i+=4) inv[i]=255-inv[i];
-      const invCov=maskCoverage(inv);
-      if(invCov.frac<cov.frac) { baseMask=inv; cov=invCov; }
-    }
     const thresh=Number(ui.threshold.value);
-    const thresholdResult=makeUsableThresholdMask(baseMask,srcData.width,srcData.height,thresh);
+    let thresholdResult=makeUsableThresholdMask(baseMask,srcData.width,srcData.height,thresh);
+    // Segmentation masks can occasionally have their foreground/background
+    // polarity reversed. Try the inverse when the normal mask is unusable or
+    // marks much of the image border as foreground.
+    const normalBorder=thresholdResult?maskBorderCoverage(thresholdResult.mask,srcData.width,srcData.height):1;
+    if(!thresholdResult||normalBorder>0.15){
+      const inverseResult=makeUsableThresholdMask(invertMask(baseMask),srcData.width,srcData.height,thresh);
+      const inverseBorder=inverseResult?maskBorderCoverage(inverseResult.mask,srcData.width,srcData.height):1;
+      if(inverseResult&&(!thresholdResult||inverseBorder<normalBorder*0.75))thresholdResult=inverseResult;
+    }
     if(!thresholdResult){
-      throw new Error(`Не удалось выделить объект даже при минимальном пороге 0.03. Проверьте, что деталь целиком видна и отличается от фона. Исходный порог: ${thresh.toFixed(2)}.`);
+      throw new Error('Модель не смогла отделить деталь от фона: маска пуста или покрывает почти весь кадр. Попробуйте другой снимок с большим отступом вокруг детали.');
     }
     baseMask=thresholdResult.mask;
+    let cov=maskCoverage(baseMask);
     // Keep the main object instead of deleting every border-connected region.
     // This is safer for parts whose soft mask touches the photo edge.
     const beforeComponent=baseMask.slice();
@@ -686,10 +708,14 @@ async function process(){
       m=preEdgeCleanup;
       status('Автоочистка слишком сузила маску; восстановлена маска до очистки краёв.');
     }
+    const finalCoverage=maskCoverage(m).frac;
+    if(finalCoverage>0.98){
+      throw new Error('Модель отметила почти весь кадр как деталь. Порог автоматически проверен в обе стороны, но подходящую маску найти не удалось.');
+    }
     maskEdited=m.slice();
     resultPixels=buildResult(maskEdited);
-    const thresholdNote=thresholdResult.threshold<thresh?` Порог автоматически снижен до ${thresholdResult.threshold.toFixed(2)}.`:'';
-    status(`Готово. Маска: ${(cov.frac*100).toFixed(1)}% кадра. Фон и отверстия очищены.${thresholdNote}`);
+    const thresholdNote=thresholdResult.threshold===thresh?'':` Порог автоматически изменён до ${thresholdResult.threshold.toFixed(2)}.`;
+    status(`Готово. Маска: ${(finalCoverage*100).toFixed(1)}% кадра. Фон и отверстия очищены.${thresholdNote}`);
     fit('res'); draw('res');
   }catch(e){
     console.error(e); status(`Ошибка обработки: ${e?.message||e}`,true); console.error('PROCESS_ERROR', e);
