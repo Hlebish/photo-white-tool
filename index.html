@@ -22,7 +22,7 @@
 <body>
 <div class="wrap"><main class="card">
 <h1>Фото деталей → чистый белый фон → 640×480</h1>
-<div class="sub">V20 • BiRefNet Lite 512 browser-ready • исходные пиксели детали сохраняются • редактор с приближением</div>
+<div class="sub">V21 • BiRefNet Lite 512 browser-ready • исходные пиксели детали сохраняются • редактор с приближением</div>
 
 <label id="drop" class="drop"><div><strong>📷 Нажми или перетащи фотографии сюда</strong><span>Можно выбрать сразу несколько JPG / PNG / WebP</span></div><input id="files" type="file" accept="image/jpeg,image/png,image/webp" multiple></label>
 
@@ -64,7 +64,7 @@
 </div>
 
 <div id="queue" class="queue"></div>
-<div class="note"><b>Почему V20:</b> предыдущий BiRefNet 1024×1024 больше не используется. Браузерный вариант <code>studioludens/birefnet-lite-512</code> специально экспортирован на 512×512 для запуска в ONNX Runtime Web; исходная 1024-модель в браузере упирается в память. V20 загружает модель напрямую через <code>AutoModel + AutoProcessor + RawImage</code>, как в примере модели, и получает чистую логит-маску. Саму фотографию AI не перерисовывает.</div>
+<div class="note"><b>Почему V21:</b> предыдущий BiRefNet 1024×1024 больше не используется. Браузерный вариант <code>studioludens/birefnet-lite-512</code> специально экспортирован на 512×512 для запуска в ONNX Runtime Web; исходная 1024-модель в браузере упирается в память. V21 загружает модель напрямую через <code>AutoModel + AutoProcessor + RawImage</code>, как в примере модели, и получает чистую логит-маску. Саму фотографию AI не перерисовывает.</div>
 </main></div>
 
 <script type="module">
@@ -171,9 +171,20 @@ async function getORMBG(){
   try{return await ormbPromise}catch(e){ormbPromise=null;throw e}
 }
 
-function tensorToMask(rawTensor,image){
-  const t=rawTensor[0].sigmoid().mul(255).to('uint8');
-  return RawImage.fromTensor(t).then(mask=>mask.resize(image.width,image.height));
+async function tensorToMask(rawTensor,image){
+  // BiRefNet returns logits with a leading batch/channel dimension.
+  // RawImage.fromTensor() is synchronous in Transformers.js 3.8.x; only
+  // the subsequent resize() is async. Normalize the tensor to [1,H,W].
+  let t=rawTensor;
+  if(t?.dims?.length === 4) t=t[0];
+  if(t?.dims?.length === 3 && t.dims[0] !== 1) t=t[0].unsqueeze(0);
+  if(t?.dims?.length === 2) t=t.unsqueeze(0);
+  if(!t?.dims || t.dims.length !== 3){
+    throw new Error(`BiRefNet: неожиданный размер logits ${JSON.stringify(t?.dims||null)}.`);
+  }
+  const alpha=t.sigmoid().mul(255).clamp(0,255).round().to('uint8');
+  const mask=RawImage.fromTensor(alpha,'CHW');
+  return await mask.resize(image.width,image.height);
 }
 
 async function biRefMask(file){
