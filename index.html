@@ -1,4 +1,3 @@
-
 <!doctype html>
 <html lang="ru">
 <head>
@@ -296,6 +295,90 @@ function maskFromAny(raw,w,h){
   return octx.getImageData(0,0,w,h).data;
 }
 
+function normalizeMaskPolarity(alpha,w,h){
+  // Some segmentation exports can return an inverted mask.
+  // Decide from the border: the photo background normally occupies the border,
+  // while the object is mostly inside the frame.
+  let borderSum=0,borderN=0,innerSum=0,innerN=0;
+  const bandX=Math.max(2,Math.floor(w*0.06)), bandY=Math.max(2,Math.floor(h*0.06));
+  const ix0=Math.floor(w*0.20), ix1=Math.ceil(w*0.80), iy0=Math.floor(h*0.20), iy1=Math.ceil(h*0.80);
+  for(let y=0;y<h;y++){
+    for(let x=0;x<w;x++){
+      if(x<bandX||x>=w-bandX||y<bandY||y>=h-bandY){
+        borderSum += alpha[(y*w+x)*4+3]; borderN++;
+      } else if(x>=ix0&&x<ix1&&y>=iy0&&y<iy1){
+        innerSum += alpha[(y*w+x)*4+3]; innerN++;
+      }
+    }
+  }
+  const bm=borderN?borderSum/borderN:0, im=innerN?innerSum/innerN:0;
+  if(bm > im + 35){
+    const out=new Uint8ClampedArray(alpha.length);
+    for(let i=3;i<alpha.length;i+=4) out[i]=255-alpha[i];
+    return out;
+  }
+  return alpha;
+}
+
+function refineThreshold(alpha, strength){
+  // Preserve a soft confidence band instead of a hard cut, which helps thin edges.
+  const out=new Uint8ClampedArray(alpha);
+  const t=Math.max(0.05,Math.min(0.95,strength));
+  const band=0.12;
+  for(let i=3;i<out.length;i+=4){
+    const v=alpha[i]/255;
+    let a;
+    if(v<=t-band) a=0;
+    else if(v>=t+band) a=255;
+    else {
+      const z=(v-(t-band))/(2*band);
+      const q=z*z*(3-2*z);
+      a=Math.round(q*255);
+    }
+    out[i]=a;
+  }
+  return out;
+}
+
+function removeBorderForeground(alpha,w,h,minArea=120){
+  // Remove foreground-like regions that are connected to the image border.
+  // This is a safety net when a model leaks background into the mask.
+  const sx=Math.max(1,Math.ceil(Math.max(w,h)/900));
+  const aw=Math.ceil(w/sx), ah=Math.ceil(h/sx);
+  const fg=new Uint8Array(aw*ah), vis=new Uint8Array(aw*ah);
+  for(let ay=0;ay<ah;ay++){
+    const y=Math.min(h-1,Math.floor((ay+0.5)*sx));
+    for(let ax=0;ax<aw;ax++){
+      const x=Math.min(w-1,Math.floor((ax+0.5)*sx));
+      fg[ay*aw+ax]=alpha[(y*w+x)*4+3] > 180 ? 1:0;
+    }
+  }
+  const q=new Int32Array(aw*ah), r=new Int32Array(aw*ah);
+  for(let sy=0;sy<ah;sy++) for(let sx0=0;sx0<aw;sx0++){
+    const si=sy*aw+sx0;
+    if(!fg[si]||vis[si]) continue;
+    let head=0,tail=0,area=0,touches=false;
+    q[tail]=sx0;r[tail]=sy;tail++;vis[si]=1;
+    while(head<tail){
+      const x=q[head],y=r[head++]; area++;
+      if(x===0||y===0||x===aw-1||y===ah-1) touches=true;
+      for(const [dx,dy] of [[1,0],[-1,0],[0,1],[0,-1]]){
+        const nx=x+dx,ny=y+dy;
+        if(nx<0||ny<0||nx>=aw||ny>=ah) continue;
+        const ni=ny*aw+nx;
+        if(fg[ni]&&!vis[ni]){vis[ni]=1;q[tail]=nx;r[tail]=ny;tail++;}
+      }
+    }
+    if(touches && area*sx*sx>=minArea){
+      for(let k=0;k<tail;k++){
+        const x=q[k],y=r[k],x0=x*sx,y0=y*sx,x1=Math.min(w,(x+1)*sx),y1=Math.min(h,(y+1)*sx);
+        for(let yy=y0;yy<y1;yy++) for(let xx=x0;xx<x1;xx++) alpha[(yy*w+xx)*4+3]=0;
+      }
+    }
+  }
+  return alpha;
+}
+
 function median(vals){
   vals.sort((a,b)=>a-b); return vals[Math.floor(vals.length/2)];
 }
@@ -324,66 +407,60 @@ function localGradient(data,w,h,x,y){
   return (Math.abs(c-data[j])+Math.abs(c-data[k])+Math.abs(c-data[l])+Math.abs(c-data[m]))/4;
 }
 function connectedComponents(mask,w,h,minArea,bgInfo,srcDataObj,holeStrength){
-  // Work on a compact analysis grid for speed; then map components back to full-size pixels.
   const maxDim=900, s=Math.max(1,Math.ceil(Math.max(w,h)/maxDim)), aw=Math.ceil(w/s), ah=Math.ceil(h/s);
-  const cand=new Uint8Array(aw*ah);
-  const visited=new Uint8Array(aw*ah);
-  const bg=bgInfo;
-  if(!srcDataObj || !srcDataObj.data) throw new Error('Внутренняя ошибка анализа изображения: отсутствуют пиксели исходника.');
-  const alphaMin=0.12 + (1-Number(holeStrength||0))*0.25;
-  const tol=Number(ui.bgTol.value);
+  const cand=new Uint8Array(aw*ah), visited=new Uint8Array(aw*ah);
+  const bg=bgInfo, tol=Number(ui.bgTol.value);
+  const alphaMin=0.35;
   for(let ay=0;ay<ah;ay++){
     const y=Math.min(h-1,Math.floor((ay+0.5)*s));
     for(let ax=0;ax<aw;ax++){
-      const x=Math.min(w-1,Math.floor((ax+0.5)*s));
-      const p=(y*w+x)*4;
+      const x=Math.min(w-1,Math.floor((ax+0.5)*s)), p=(y*w+x)*4;
       const a=mask[p+3]/255;
+      if(a<alphaMin) continue;
       const d=colorDist(srcDataObj.data[p],srcDataObj.data[p+1],srcDataObj.data[p+2],bg);
       const sat=Math.max(srcDataObj.data[p],srcDataObj.data[p+1],srcDataObj.data[p+2])-Math.min(srcDataObj.data[p],srcDataObj.data[p+1],srcDataObj.data[p+2]);
       const grad=localGradient(srcDataObj.data,w,h,x,y);
-      if(a>alphaMin && d<tol && sat<55 && grad<90) cand[ay*aw+ax]=1;
+      if(d<tol && sat<70 && grad<120) cand[ay*aw+ax]=1;
     }
   }
-  const cleared=new Uint8Array(aw*ah);
-  const qx=new Int32Array(aw*ah), qy=new Int32Array(aw*ah);
-  let removed=0;
-  for(let sy=0;sy<ah;sy++) for(let sx=0;sx<aw;sx++){
-    const si=sy*aw+sx;
+  const cleared=new Uint8Array(aw*ah), qx=new Int32Array(aw*ah), qy=new Int32Array(aw*ah);
+  for(let sy=0;sy<ah;sy++) for(let sx0=0;sx0<aw;sx0++){
+    const si=sy*aw+sx0;
     if(!cand[si]||visited[si]) continue;
-    let head=0,tail=0,minx=sx,maxx=sx,miny=sy,maxy=sy,area=0,touches=false;
-    qx[tail]=sx;qy[tail]=sy;tail++;visited[si]=1;
+    let head=0,tail=0,minx=sx0,maxx=sx0,miny=sy,maxy=sy,area=0,touches=false;
+    qx[tail]=sx0;qy[tail]=sy;tail++;visited[si]=1;
     while(head<tail){
-      const x=qx[head],y=qy[head];head++;area++;
+      const x=qx[head],y=qy[head++]; area++;
       if(x===0||y===0||x===aw-1||y===ah-1) touches=true;
-      if(x<minx)minx=x;if(x>maxx)maxx=x;if(y<miny)miny=y;if(y>maxy)maxy=y;
+      minx=Math.min(minx,x);maxx=Math.max(maxx,x);miny=Math.min(miny,y);maxy=Math.max(maxy,y);
       for(const [dx,dy] of [[1,0],[-1,0],[0,1],[0,-1]]){
         const nx=x+dx,ny=y+dy;if(nx<0||ny<0||nx>=aw||ny>=ah)continue;
-        const ni=ny*aw+nx;
-        if(cand[ni]&&!visited[ni]){visited[ni]=1;qx[tail]=nx;qy[tail]=ny;tail++;}
+        const ni=ny*aw+nx;if(cand[ni]&&!visited[ni]){visited[ni]=1;qx[tail]=nx;qy[tail]=ny;tail++;}
       }
     }
-    const approxArea=area*s*s;
-    const bw=(maxx-minx+1)*s,bh=(maxy-miny+1)*s;
-    if(!touches && approxArea>=minArea && bw>=35 && bh>=25){
+    const approx=area*s*s, bw=(maxx-minx+1)*s,bh=(maxy-miny+1)*s;
+    // Keep only sizeable enclosed regions; border-touching candidates are external shadows/background.
+    if(!touches && approx>=minArea && bw>=30 && bh>=20){
       for(let i=0;i<tail;i++) cleared[qy[i]*aw+qx[i]]=1;
-      removed+=approxArea;
     }
   }
-  return {cleared,s,aw,ah,removed};
+  return {cleared,s,aw,ah};
 }
 
 function applyHoleCleanup(alpha, srcImg){
   const w=srcImg.width,h=srcImg.height;
-  const bg=estimateBackground(srcImg,alpha);
   const strength=Number(ui.holes.value)/100;
   if(strength<=0) return alpha;
+  const bg=estimateBackground(srcImg,alpha);
   const comp=connectedComponents(alpha,w,h,Number(ui.holeArea.value),bg,srcImg,strength);
-  const out=new Uint8ClampedArray(alpha.length);
-  out.set(alpha);
+  const out=new Uint8ClampedArray(alpha); const amount=Math.max(0,Math.min(1,strength));
   for(let ay=0;ay<comp.ah;ay++) for(let ax=0;ax<comp.aw;ax++){
     if(!comp.cleared[ay*comp.aw+ax]) continue;
     const x0=ax*comp.s,y0=ay*comp.s,x1=Math.min(w,(ax+1)*comp.s),y1=Math.min(h,(ay+1)*comp.s);
-    for(let y=y0;y<y1;y++) for(let x=x0;x<x1;x++){out[(y*w+x)*4+3]=0;}
+    for(let y=y0;y<y1;y++) for(let x=x0;x<x1;x++){
+      const p=(y*w+x)*4, old=out[p+3];
+      out[p+3]=Math.round(old*(1-amount));
+    }
   }
   return out;
 }
@@ -477,18 +554,21 @@ async function process(){
     let best=segments[0];
     for(const s of segments){if((s.score??0)>=(best.score??0))best=s;}
     const rawMask=best.mask || best;
-    const baseMask=maskFromAny(rawMask,srcData.width,srcData.height);
+    let baseMask=maskFromAny(rawMask,srcData.width,srcData.height);
+    baseMask=normalizeMaskPolarity(baseMask,srcData.width,srcData.height);
     const thresh=Number(ui.threshold.value);
-    for(let i=3;i<baseMask.length;i+=4) baseMask[i]=baseMask[i]/255>=thresh?baseMask[i]:0;
+    baseMask=refineThreshold(baseMask,thresh);
+    // Safety pass: eliminate large foreground regions connected to the photo border.
+    baseMask=removeBorderForeground(baseMask,srcData.width,srcData.height,160);
     maskBase=baseMask;
-    // V24: first remove large background-like enclosed regions from the model mask.
+    // Remove large background-looking regions that are trapped inside the object.
     let m=applyHoleCleanup(maskBase,srcData);
     m=softenAndShadowClean(m,srcData);
     const softR=Number(ui.soft.value);
     if(softR>0)m=feather(m,srcData.width,srcData.height,softR);
     maskEdited=m.slice();
     resultPixels=buildResult(maskEdited);
-    status('Готово. Маска обработана: край уточнён, внутренние области очищены.');
+    status('Готово. Маска нормализована, фон и внутренние отверстия очищены.');
     fit('res'); draw('res');
   }catch(e){
     console.error(e); status(`Ошибка обработки: ${e?.message||e}`,true); console.error('PROCESS_ERROR', e);
