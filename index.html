@@ -248,19 +248,50 @@ async function getSegmenter(){
   return loadingPromise;
 }
 
-function maskFromRawImage(raw,w,h){
-  const mw=raw.width,mh=raw.height, d=raw.data;
-  const ch=raw.channels || (d.length/(mw*mh));
-  const c=document.createElement('canvas');c.width=mw;c.height=mh;
+function isTensorLike(x){
+  return x && x.data && Array.isArray(x.dims) && x.dims.length>=2;
+}
+function maskFromAny(raw,w,h){
+  // Transformers.js may return RawImage or Tensor-like data depending on pipeline/model build.
+  // Normalize both forms to a full-resolution RGBA alpha mask.
+  let mw, mh, d, ch;
+  if(raw && Number.isFinite(raw.width) && Number.isFinite(raw.height) && raw.data){
+    mw = raw.width; mh = raw.height; d = raw.data;
+    ch = Number(raw.channels) || Math.max(1, Math.round(d.length/(mw*mh)));
+  } else if(isTensorLike(raw)){
+    const dims = raw.dims.map(Number);
+    mh = dims[dims.length-2]; mw = dims[dims.length-1]; d = raw.data;
+    ch = 1;
+  } else if(raw && raw.data && Number.isFinite(raw.width) && Number.isFinite(raw.height)){
+    mw=Number(raw.width); mh=Number(raw.height); d=raw.data; ch=1;
+  } else {
+    throw new Error('Модель вернула маску в неподдерживаемом формате.');
+  }
+  if(!mw || !mh || !d || !d.length) throw new Error('Маска модели пустая.');
+  const c=document.createElement('canvas'); c.width=mw; c.height=mh;
   const ctx=c.getContext('2d');
   const id=ctx.createImageData(mw,mh);
-  for(let i=0,p=0;i<mw*mh;i++,p+=ch){
-    const v=ch===1?d[p]:d[p+3]??d[p];
-    id.data[i*4]=v;id.data[i*4+1]=v;id.data[i*4+2]=v;id.data[i*4+3]=255;
+  const isFloat = d instanceof Float32Array || d instanceof Float64Array;
+  const scaleFloat = isFloat ? 255 : 1;
+  for(let i=0;i<mw*mh;i++){
+    let v;
+    const p=i*ch;
+    if(ch===1){
+      v=Number(d[p])*scaleFloat;
+    } else if(ch>=4){
+      // For RGBA RawImage masks, alpha is the mask. If alpha is flat, fall back to first channel.
+      const a=Number(d[p+3])*scaleFloat, r=Number(d[p])*scaleFloat;
+      v = (a>1 ? a : r);
+    } else {
+      v=Number(d[p])*scaleFloat;
+    }
+    if(!Number.isFinite(v)) v=0;
+    v=clamp(v,0,255);
+    const q=i*4; id.data[q]=v; id.data[q+1]=v; id.data[q+2]=v; id.data[q+3]=255;
   }
   ctx.putImageData(id,0,0);
-  const out=document.createElement('canvas');out.width=w;out.height=h;
-  const octx=out.getContext('2d');octx.imageSmoothingEnabled=true;octx.imageSmoothingQuality='high';octx.drawImage(c,0,0,w,h);
+  const out=document.createElement('canvas'); out.width=w; out.height=h;
+  const octx=out.getContext('2d'); octx.imageSmoothingEnabled=true; octx.imageSmoothingQuality='high'; octx.drawImage(c,0,0,w,h);
   return octx.getImageData(0,0,w,h).data;
 }
 
@@ -283,7 +314,7 @@ function estimateBackground(img, alpha){
   if(samplesR.length<20){
     for(let y=0;y<Math.min(h,20);y+=2) for(let x=0;x<Math.min(w,20);x+=2){let i=(y*w+x)*4;samplesR.push(data[i]);samplesG.push(data[i+1]);samplesB.push(data[i+2]);}
   }
-  return [median(samplesR),median(samplesG),median(samplesB)];
+  return [samplesR.length?median(samplesR):220,samplesG.length?median(samplesG):220,samplesB.length?median(samplesB):220];
 }
 function colorDist(r,g,b,bg){return Math.sqrt((r-bg[0])**2+(g-bg[1])**2+(b-bg[2])**2);}
 function localGradient(data,w,h,x,y){
@@ -297,7 +328,7 @@ function connectedComponents(mask,w,h,minArea,bgInfo,srcDataObj,holeStrength){
   const cand=new Uint8Array(aw*ah);
   const visited=new Uint8Array(aw*ah);
   const bg=bgInfo;
-  const alphaMin=0.28 + (1-holeStrength)*0.35;
+  const alphaMin=0.12 + (1-holeStrength)*0.25;
   const tol=Number(ui.bgTol.value);
   for(let ay=0;ay<ah;ay++){
     const y=Math.min(h-1,Math.floor((ay+0.5)*s));
@@ -308,7 +339,7 @@ function connectedComponents(mask,w,h,minArea,bgInfo,srcDataObj,holeStrength){
       const d=colorDist(srcDataObj.data[p],srcDataObj.data[p+1],srcDataObj.data[p+2],bg);
       const sat=Math.max(srcDataObj.data[p],srcDataObj.data[p+1],srcDataObj.data[p+2])-Math.min(srcDataObj.data[p],srcDataObj.data[p+1],srcDataObj.data[p+2]);
       const grad=localGradient(srcDataObj.data,w,h,x,y);
-      if(a>alphaMin && d<tol && sat<35 && grad<55) cand[ay*aw+ax]=1;
+      if(a>alphaMin && d<tol && sat<55 && grad<90) cand[ay*aw+ax]=1;
     }
   }
   const cleared=new Uint8Array(aw*ah);
@@ -444,7 +475,7 @@ async function process(){
     let best=segments[0];
     for(const s of segments){if((s.score??0)>=(best.score??0))best=s;}
     const rawMask=best.mask || best;
-    const baseMask=maskFromRawImage(rawMask,srcData.width,srcData.height);
+    const baseMask=maskFromAny(rawMask,srcData.width,srcData.height);
     const thresh=Number(ui.threshold.value);
     for(let i=3;i<baseMask.length;i+=4) baseMask[i]=baseMask[i]/255>=thresh?baseMask[i]:0;
     maskBase=baseMask;
@@ -455,10 +486,10 @@ async function process(){
     if(softR>0)m=feather(m,srcData.width,srcData.height,softR);
     maskEdited=m.slice();
     resultPixels=buildResult(maskEdited);
-    status('Готово. Внутренние отверстия очищены отдельным алгоритмом.');
+    status('Готово. Маска обработана: край уточнён, внутренние области очищены.');
     fit('res'); draw('res');
   }catch(e){
-    console.error(e); status(`Ошибка обработки: ${e?.message||e}`,true);
+    console.error(e); status(`Ошибка обработки: ${e?.message||e}`,true); console.error('PROCESS_ERROR', e);
   }finally{ui.process.disabled=false;}
 }
 
