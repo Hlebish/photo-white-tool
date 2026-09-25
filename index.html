@@ -67,11 +67,20 @@ button,select{font:inherit;padding:10px 13px;border:1px solid var(--line);border
 </main></div>
 
 <script src="https://cdn.jsdelivr.net/npm/onnxruntime-web@1.23.0/dist/ort.min.js"></script>
-<script src="https://unpkg.com/@bunnio/rembg-web@1.0.2/dist/index.umd.min.js"></script>
+
 <script>
 // UMD-вариант: интерфейс продолжает работать даже если AI-библиотека загрузится с ошибкой.
-const rembg = window.rembgWeb;
-if (rembg?.rembgConfig) rembg.rembgConfig.setBaseUrl("https://huggingface.co/bunnio/dis_anime/resolve/main");
+let rembg = null;
+let aiLoadPromise = null;
+async function loadAI(){
+  if(rembg) return rembg;
+  if(aiLoadPromise) return aiLoadPromise;
+  aiLoadPromise = import("https://unpkg.com/@bunnio/rembg-web@1.0.2/dist/index.js")
+    .then(m=>{ rembg=m; rembg.rembgConfig.setBaseUrl("https://huggingface.co/bunnio/dis_anime/resolve/main"); return rembg; })
+    .catch(e=>{ console.error("AI module load failed",e); throw new Error("Не удалось загрузить AI-модуль. Проверь интернет или блокировку CDN."); });
+  return aiLoadPromise;
+}
+loadAI().catch(()=>{});
 
 const $=id=>document.getElementById(id);
 const filesEl=$("files"),drop=$("drop"),processBtn=$("process"),statusEl=$("status"),bar=$("bar");
@@ -108,15 +117,15 @@ function setFiles(list){
     queue.appendChild(el);
   });
   processBtn.disabled=!files.length;
-  if(files.length) setStatus("Выбрано: "+files[0].name+". Нажми «Обработать».");
+  if(files.length) setStatus("Выбрано: "+files[0].name+". Нажми «Обработать». AI загрузится при первом запуске.");
 }
 
 async function removeBg(file){
   const model=$("model").value;
   setStatus("Подготавливаю "+model+"…",5);
-  if(!rembg) throw new Error("Не загрузился AI-модуль rembg-web. Обнови страницу или проверь интернет.");
-  const session=rembg.newSession(model);
-  const result=await rembg.remove(file,{
+  const ai=await loadAI();
+  const session=ai.newSession(model);
+  const result=await ai.remove(file,{
     session,
     onlyMask:true,
     postProcessMask:true,
