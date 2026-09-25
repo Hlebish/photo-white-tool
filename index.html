@@ -10,7 +10,7 @@
 main{max-width:1280px;margin:auto;padding:20px}h1{font-size:24px;margin:0 0 4px}.intro,.hint{color:var(--muted);font-size:13px}.intro{margin:0 0 16px}
 .grid{display:grid;grid-template-columns:1fr 1fr;gap:16px}.card{min-width:0;background:var(--card);border:1px solid var(--line);border-radius:14px;padding:14px;box-shadow:0 3px 14px #19283a0a}
 h2{font-size:16px;margin:0 0 10px}.stage{height:480px;position:relative;overflow:hidden;border:1px solid var(--line);border-radius:10px;background-color:#fff;background-image:linear-gradient(45deg,#e8ebf0 25%,transparent 25%),linear-gradient(-45deg,#e8ebf0 25%,transparent 25%),linear-gradient(45deg,transparent 75%,#e8ebf0 75%),linear-gradient(-45deg,transparent 75%,#e8ebf0 75%);background-size:18px 18px;background-position:0 0,0 9px,9px -9px,-9px 0}
-canvas{width:100%;height:100%;display:block;object-fit:contain}input[type=file]{max-width:100%}.actions,.row{display:flex;align-items:center;gap:10px;flex-wrap:wrap}button{font:inherit;border:1px solid #c8d0dc;background:#fff;border-radius:9px;padding:9px 12px;cursor:pointer}button:hover:not(:disabled){background:#f6f8fb}button:disabled{opacity:.5;cursor:not-allowed}button.primary{background:var(--blue);color:#fff;border-color:var(--blue)}
+canvas{width:100%;height:100%;display:block;object-fit:contain;touch-action:none}input[type=file]{max-width:100%}.actions,.row{display:flex;align-items:center;gap:10px;flex-wrap:wrap}button{font:inherit;border:1px solid #c8d0dc;background:#fff;border-radius:9px;padding:9px 12px;cursor:pointer}button:hover:not(:disabled){background:#f6f8fb}button:disabled{opacity:.5;cursor:not-allowed}button.primary{background:var(--blue);color:#fff;border-color:var(--blue)}button.active{background:#e8efff;border-color:var(--blue);color:#214bd0}.brush-size{font-size:13px;color:var(--muted);display:flex;align-items:center;gap:6px}.brush-size input{width:82px}
 .settings{margin-top:16px}.row{justify-content:space-between}.model{font-size:13px;color:var(--muted)}.control{display:grid;grid-template-columns:minmax(180px,250px) 1fr 52px;gap:12px;align-items:center;margin:16px 0 10px}.control input{width:100%}output{font-variant-numeric:tabular-nums;text-align:right}.status{margin-top:12px;padding:10px 12px;min-height:42px;border-radius:9px;background:#f3f6fb;color:#435165}.status.error{background:#fff0f0;color:var(--bad)}.status.success{background:#edf8f0;color:var(--good)}.hint{margin-top:8px}.progress{height:6px;background:#e9edf3;border-radius:99px;overflow:hidden;margin-top:10px}.progress>div{height:100%;width:0;background:var(--blue);transition:width .2s}
 @media(max-width:800px){main{padding:12px}.grid{grid-template-columns:1fr}.stage{height:min(70vw,420px)}.control{grid-template-columns:1fr 50px}.control label{grid-column:1/-1}}
 </style>
@@ -35,6 +35,9 @@ canvas{width:100%;height:100%;display:block;object-fit:contain}input[type=file]{
       <button id="process" class="primary" disabled>Удалить фон и сделать 640×480</button>
       <div class="actions">
         <button id="maskButton" disabled>Показать маску</button>
+        <button id="brushButton" disabled>Белая кисть</button>
+        <label class="brush-size">Размер <input id="brushSize" type="range" min="1" max="16" value="4"><output id="brushValue">4 px</output></label>
+        <button id="undoButton" disabled>Отменить мазок</button>
         <button id="download" disabled>Скачать PNG 640×480</button>
       </div>
       <span class="model">Модель BEN2 Base · запуск в браузере</span>
@@ -44,7 +47,7 @@ canvas{width:100%;height:100%;display:block;object-fit:contain}input[type=file]{
       <input id="cutoff" type="range" min="0.25" max="0.80" step="0.01" value="0.52">
       <output id="cutoffValue">0.52</output>
     </div>
-    <div class="hint">Выше значение — сильнее удаляются тени и серый ореол. Деталь сохраняется по исходным пикселям; искусственная резкость и размытие не применяются. При первом запуске браузер загрузит модель (около 219 МБ); далее она берётся из кэша.</div>
+    <div class="hint">Выше значение — сильнее удаляются тени и серый ореол. Изолированные мелкие островки маски удаляются автоматически. Включи «Белая кисть» и проведи по остаткам фона; один мазок можно отменить. Деталь не размывается и не перешарпливается. При первом запуске браузер загрузит модель (около 219 МБ); далее она берётся из кэша.</div>
     <div id="progress" class="progress" aria-hidden="true"><div id="progressBar"></div></div>
     <div id="status" class="status" role="status">Выбери фото запчасти. Результат всегда будет PNG 640×480 на чистом белом фоне.</div>
   </section>
@@ -57,8 +60,8 @@ env.useBrowserCache=true;
 
 const MODEL_ID='onnx-community/BEN2-ONNX';
 const $=id=>document.getElementById(id);
-const ui={file:$('file'),source:$('sourceCanvas'),result:$('resultCanvas'),process:$('process'),download:$('download'),mask:$('maskButton'),cutoff:$('cutoff'),cutoffValue:$('cutoffValue'),status:$('status'),progress:$('progressBar')};
-let sourceImage=null,sourceUrl=null,maskData=null,maskWidth=0,maskHeight=0,resultCanvas=null,segmenter=null,loading=null,showingMask=false;
+const ui={file:$('file'),source:$('sourceCanvas'),result:$('resultCanvas'),process:$('process'),download:$('download'),mask:$('maskButton'),brush:$('brushButton'),brushSize:$('brushSize'),brushValue:$('brushValue'),undo:$('undoButton'),cutoff:$('cutoff'),cutoffValue:$('cutoffValue'),status:$('status'),progress:$('progressBar')};
+let sourceImage=null,sourceUrl=null,maskData=null,maskWidth=0,maskHeight=0,resultCanvas=null,segmenter=null,loading=null,showingMask=false,brushActive=false,painting=false,lastPoint=null,editHistory=[];
 
 function setStatus(message,type=''){
   ui.status.textContent=message;
@@ -86,7 +89,7 @@ function loadPhoto(file){
   const img=new Image();
   img.onload=()=>{
     sourceImage=img;
-    maskData=null;maskWidth=0;maskHeight=0;resultCanvas=null;showingMask=false;ui.download.disabled=true;ui.mask.disabled=true;
+    maskData=null;maskWidth=0;maskHeight=0;resultCanvas=null;showingMask=false;brushActive=false;editHistory=[];ui.brush.classList.remove('active');ui.brush.textContent='Белая кисть';ui.brush.style.cursor='default';ui.download.disabled=true;ui.mask.disabled=true;ui.brush.disabled=true;ui.undo.disabled=true;
     fitCanvas(ui.source,sourceImage);fitCanvas(ui.result,null);ui.process.disabled=false;
     setProgress(0);setStatus(`Фото загружено: ${img.naturalWidth}×${img.naturalHeight}. Нажми «Удалить фон и сделать 640×480».`);
   };
@@ -138,6 +141,25 @@ function cleanMatte(input,w,h,cutoff){
     out[i]=Math.round(z*z*(3-2*z)*255);
   }
   return out;
+}
+
+function removeTinyComponents(alpha,w,h,minArea=24){
+  const seen=new Uint8Array(alpha.length),queue=new Int32Array(alpha.length);
+  let removedCount=0;
+  for(let start=0;start<alpha.length;start++){
+    if(seen[start]||alpha[start]<200)continue;
+    let head=0,tail=0;queue[tail++]=start;seen[start]=1;
+    while(head<tail){
+      const p=queue[head++],x=p%w,y=(p/w)|0;
+      for(let dy=-1;dy<=1;dy++)for(let dx=-1;dx<=1;dx++){
+        if(!dx&&!dy)continue;const nx=x+dx,ny=y+dy;
+        if(nx<0||nx>=w||ny<0||ny>=h)continue;
+        const q=ny*w+nx;if(!seen[q]&&alpha[q]>=200){seen[q]=1;queue[tail++]=q;}
+      }
+    }
+    if(tail<minArea){for(let i=0;i<tail;i++)alpha[queue[i]]=0;removedCount++;}
+  }
+  return removedCount;
 }
 
 function matteCoverage(alpha){let n=0;for(const a of alpha)if(a>32)n++;return n/alpha.length;}
@@ -192,7 +214,7 @@ async function makeModelInputUrl(img){
 
 async function processPhoto(){
   if(!sourceImage)return;
-  ui.process.disabled=true;ui.download.disabled=true;ui.mask.disabled=true;setProgress(0);setStatus('Подготавливаю BEN2…');
+  ui.process.disabled=true;ui.download.disabled=true;ui.mask.disabled=true;ui.brush.disabled=true;ui.undo.disabled=true;setProgress(0);setStatus('Подготавливаю BEN2…');
   try{
     const model=await getSegmenter();
     setStatus('BEN2 анализирует деталь и отделяет фон…');
@@ -202,10 +224,11 @@ async function processPhoto(){
     if(!output?.length)throw new Error('BEN2 не вернула результат.');
     const raw=readMask(output[0]);
     const alpha=cleanMatte(raw.alpha,raw.width,raw.height,Number(ui.cutoff.value));
+    const removedComponents=removeTinyComponents(alpha,raw.width,raw.height);
     const result=makeOutput(alpha,raw.width,raw.height);
     maskData=alpha;maskWidth=raw.width;maskHeight=raw.height;resultCanvas=result.canvas;showingMask=false;
-    fitCanvas(ui.result,resultCanvas);ui.download.disabled=false;ui.mask.disabled=false;setProgress(100);
-    setStatus(`Готово: PNG 640×480. Деталь занимает ${(result.coverage*100).toFixed(1)}% исходного кадра; фон белый.`,'success');
+    fitCanvas(ui.result,resultCanvas);ui.download.disabled=false;ui.mask.disabled=false;ui.brush.disabled=false;editHistory=[];ui.undo.disabled=true;setProgress(100);
+    setStatus(`Готово: PNG 640×480. Деталь занимает ${(result.coverage*100).toFixed(1)}% исходного кадра; фон белый.${removedComponents?` Удалено мелких пятен: ${removedComponents}.`:''}`,'success');
   }catch(error){
     console.error(error);setProgress(0);setStatus(`Ошибка обработки: ${error?.message||error}`,'error');
   }finally{ui.process.disabled=false;}
@@ -217,11 +240,46 @@ ui.cutoff.addEventListener('input',()=>ui.cutoffValue.value=Number(ui.cutoff.val
 ui.mask.addEventListener('click',()=>{
   if(!maskData)return;
   showingMask=!showingMask;
+  ui.brush.disabled=showingMask||!resultCanvas;
   if(!showingMask){fitCanvas(ui.result,resultCanvas);ui.mask.textContent='Показать маску';return;}
   const w=maskWidth,h=maskHeight,c=document.createElement('canvas');c.width=w;c.height=h;
   const ctx=c.getContext('2d'),image=ctx.createImageData(w,h);
   for(let p=0,i=0;p<maskData.length;p++,i+=4){image.data[i]=image.data[i+1]=image.data[i+2]=maskData[p];image.data[i+3]=255;}
   ctx.putImageData(image,0,0);fitCanvas(ui.result,c);ui.mask.textContent='Показать результат';
+});
+ui.brushSize.addEventListener('input',()=>{ui.brushValue.value=`${ui.brushSize.value} px`;});
+ui.brush.addEventListener('click',()=>{
+  if(!resultCanvas||showingMask)return;
+  brushActive=!brushActive;ui.brush.classList.toggle('active',brushActive);
+  ui.brush.textContent=brushActive?'Кисть включена':'Белая кисть';
+  ui.result.style.cursor=brushActive?'crosshair':'default';
+});
+function brushPoint(event,clampToImage=false){
+  const r=ui.result.getBoundingClientRect(),scale=Math.min(r.width/640,r.height/480),viewW=640*scale,viewH=480*scale;
+  const x=(event.clientX-r.left-(r.width-viewW)/2)/scale,y=(event.clientY-r.top-(r.height-viewH)/2)/scale;
+  if(!clampToImage&&(x<0||x>640||y<0||y>480))return null;
+  return{x:clamp(x,0,640),y:clamp(y,0,480)};
+}
+ui.result.addEventListener('pointerdown',event=>{
+  if(!brushActive||showingMask||!resultCanvas)return;
+  const point=brushPoint(event);if(!point)return;
+  event.preventDefault();painting=true;lastPoint=point;
+  if(editHistory.length>=20)editHistory.shift();
+  editHistory.push(resultCanvas.getContext('2d').getImageData(0,0,640,480));ui.undo.disabled=false;
+  ui.result.setPointerCapture(event.pointerId);
+  const ctx=resultCanvas.getContext('2d');ctx.fillStyle='#fff';ctx.beginPath();ctx.arc(lastPoint.x,lastPoint.y,Number(ui.brushSize.value)/2,0,Math.PI*2);ctx.fill();
+  fitCanvas(ui.result,resultCanvas);
+});
+ui.result.addEventListener('pointermove',event=>{
+  if(!painting||!lastPoint)return;
+  const point=brushPoint(event,true),ctx=resultCanvas.getContext('2d');
+  ctx.strokeStyle='#fff';ctx.lineWidth=Number(ui.brushSize.value);ctx.lineCap='round';ctx.lineJoin='round';ctx.beginPath();ctx.moveTo(lastPoint.x,lastPoint.y);ctx.lineTo(point.x,point.y);ctx.stroke();lastPoint=point;fitCanvas(ui.result,resultCanvas);
+});
+function stopPainting(){painting=false;lastPoint=null;}
+ui.result.addEventListener('pointerup',stopPainting);ui.result.addEventListener('pointercancel',stopPainting);
+ui.undo.addEventListener('click',()=>{
+  if(!resultCanvas||!editHistory.length)return;
+  resultCanvas.getContext('2d').putImageData(editHistory.pop(),0,0);fitCanvas(ui.result,resultCanvas);ui.undo.disabled=!editHistory.length;
 });
 ui.download.addEventListener('click',()=>{
   if(!resultCanvas)return;
