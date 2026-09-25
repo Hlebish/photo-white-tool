@@ -81,14 +81,54 @@ function renderQueue(){
 
 async function getPipe(){
   if(pipe)return pipe;
-  setStatus('Загрузка AI-модели… это только первый раз.',0);
-  pipe=await pipeline('background-removal','briaai/RMBG-1.4',{
-    device: navigator.gpu ? 'webgpu' : 'wasm',
-    progress_callback: p=>{
-      if(p.status==='progress' && typeof p.progress==='number') setStatus(`Загрузка AI-модели: ${Math.round(p.progress)}%`,p.progress);
+
+  setStatus('Проверяю ускорение GPU…',0);
+
+  // Просто наличие navigator.gpu ещё НЕ означает, что Chrome реально
+  // может получить WebGPU-адаптер. На некоторых ПК WebGPU присутствует,
+  // но адаптер недоступен. Поэтому сначала делаем настоящую проверку.
+  let device='wasm';
+  try{
+    if(navigator.gpu){
+      const adapter=await navigator.gpu.requestAdapter();
+      if(adapter) device='webgpu';
     }
-  });
-  return pipe;
+  }catch(e){
+    console.warn('WebGPU недоступен, использую WASM:',e);
+  }
+
+  setStatus(device==='webgpu'
+    ? 'GPU доступен. Загружаю AI-модель… это только первый раз.'
+    : 'GPU недоступен. Использую универсальный режим WASM… это работает без WebGPU.',0);
+
+  try{
+    const created=await pipeline('background-removal','briaai/RMBG-1.4',{
+      device,
+      progress_callback: p=>{
+        if(p.status==='progress' && typeof p.progress==='number')
+          setStatus(`Загрузка AI-модели: ${Math.round(p.progress)}%`,p.progress);
+      }
+    });
+    pipe=created;
+    return pipe;
+  }catch(firstError){
+    // Если WebGPU формально есть, но сама модель не смогла запуститься,
+    // автоматически переключаемся на WASM вместо падения всего сайта.
+    if(device==='webgpu'){
+      console.warn('WebGPU backend не запустился. Переключаюсь на WASM.',firstError);
+      setStatus('WebGPU не запустился. Переключаюсь на универсальный WASM…',0);
+      const created=await pipeline('background-removal','briaai/RMBG-1.4',{
+        device:'wasm',
+        progress_callback: p=>{
+          if(p.status==='progress' && typeof p.progress==='number')
+            setStatus(`Загрузка AI-модели: ${Math.round(p.progress)}%`,p.progress);
+        }
+      });
+      pipe=created;
+      return pipe;
+    }
+    throw firstError;
+  }
 }
 
 function loadImage(file){return new Promise((resolve,reject)=>{const im=new Image();im.onload=()=>resolve(im);im.onerror=reject;im.src=URL.createObjectURL(file)})}
