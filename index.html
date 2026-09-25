@@ -26,7 +26,7 @@ button,select{font:inherit;padding:10px 13px;border:1px solid var(--line);border
 <body>
 <div class="wrap"><main class="card">
 <h1>Фото деталей → чистый белый фон → 640×480</h1>
-<div class="sub">V14 • прямой запуск моделей через Transformers.js • AI не изменяет пиксели самой детали</div>
+<div class="sub">V15 • прямой запуск моделей через Transformers.js • вход конвертируется в RawImage • AI не изменяет пиксели самой детали</div>
 
 <label id="drop" class="drop">
   <div><strong>📷 Нажми или перетащи фотографии сюда</strong><span>Можно выбрать сразу несколько JPG / PNG / WebP</span></div>
@@ -50,8 +50,8 @@ button,select{font:inherit;padding:10px 13px;border:1px solid var(--line);border
 
 <div class="tuning">
   <div class="tuning-grid">
-    <label>Удаление серого фона / теней: <span id="thrVal" class="value">64%</span>
-      <input id="thr" type="range" min="45" max="82" value="64">
+    <label>Удаление серого фона / теней: <span id="thrVal" class="value">60%</span>
+      <input id="thr" type="range" min="45" max="82" value="60">
     </label>
     <label>Резкость после 640×480: <span id="sharpVal" class="value">0.35</span>
       <input id="sharp" type="range" min="0" max="70" value="35">
@@ -75,7 +75,7 @@ button,select{font:inherit;padding:10px 13px;border:1px solid var(--line);border
 </div>
 
 <div id="queue" class="queue"></div>
-<div class="note"><b>Как сделано:</b> модель строит только маску. Оригинальная фотография детали берётся напрямую из исходника. Никаких AI-изменений текстуры, граней или цвета самой детали нет. Маска после AI очищается от слабых теней, затем выполняется один финальный resize до 640×480. Для первого теста оставь <b>RMBG-1.4</b> и порог <b>64%</b>.</div>
+<div class="note"><b>Как сделано:</b> модель строит только маску. Оригинальная фотография детали берётся напрямую из исходника. Никаких AI-изменений текстуры, граней или цвета самой детали нет. Маска после AI очищается от слабых теней, затем выполняется один финальный resize до 640×480. Для первого теста оставь <b>RMBG-1.4</b> и порог <b>60%</b>.</div>
 </main></div>
 
 <script type="module">
@@ -273,7 +273,10 @@ async function getMaskFromPipeline(file,key){
   const model=MODEL_CONFIG[key];
   const pipe=await getPipe(key);
   setStatus(`${model.label}: выделяю объект…`,60);
-  const result=await pipe(file,{threshold:.15,mask_threshold:.05,overlap_mask_area_threshold:.5});
+  // IMPORTANT: File objects can pass through the browser boundary as plain objects in some Transformers.js/ONNX paths.
+  // Convert explicitly to RawImage, which is the documented image input type for the pipeline.
+  const inputImage = await RawImage.fromBlob(file);
+  const result=await pipe(inputImage,{threshold:.15,mask_threshold:.05,overlap_mask_area_threshold:.5});
   if(!Array.isArray(result)||!result.length)throw new Error('Модель не вернула маску.');
   // Для background-removal моделей foreground обычно единственный сегмент.
   const item=result.find(x=>String(x?.label||'').toLowerCase().includes('foreground'))||result[0];
